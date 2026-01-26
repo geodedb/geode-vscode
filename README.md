@@ -1,93 +1,186 @@
-# geode-vscode
+# Geode GQL for Visual Studio Code
 
+Full-featured GQL (Graph Query Language) and Cypher support for the Geode graph database.
 
+## Features
 
-## Getting started
+### Language Support
+- **Syntax Highlighting**: Full TextMate grammar for GQL and Cypher
+- **Code Snippets**: 25+ snippets for common query patterns
+- **Language Server**: Real-time diagnostics, hover docs, completions
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+### Query Execution
+- **Run Query**: Execute the current file (`Ctrl+Enter` / `Cmd+Enter`)
+- **Run Selection**: Execute selected text (`Ctrl+Shift+Enter`)
+- **Explain Query**: View query execution plan
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-* [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin https://gitlab.com/devnw/codepros/geode/geode-vscode.git
-git branch -M main
-git push -uf origin main
-```
-
-## Integrate with your tools
-
-* [Set up project integrations](https://gitlab.com/devnw/codepros/geode/geode-vscode/-/settings/integrations)
-
-## Collaborate with your team
-
-* [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
-
-## Test and Deploy
-
-Use the built-in continuous integration in GitLab.
-
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
-
-***
-
-# Editing this README
-
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
-
-## Suggestions for a good README
-
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+### Editor Integration
+- **Status Bar**: Connection status and LSP indicator
+- **Documentation Panel**: Built-in GQL reference
+- **Context Menus**: Right-click to run queries
 
 ## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+
+### Prerequisites
+
+1. **Geode** must be installed and in your PATH:
+   ```bash
+   git clone https://gitlab.com/devnw/codepros/geode/geode.git
+   cd geode && make build
+   export PATH="$PWD/zig-out/bin:$PATH"
+   ```
+
+### Install Extension
+
+#### Option 1: Build and Install VSIX (Recommended for Testing)
+
+```bash
+# Install dependencies
+npm install
+
+# Compile TypeScript
+npm run compile
+
+# Package as VSIX
+npm run package
+
+# Install in VS Code
+code --install-extension geode-gql-1.0.0.vsix
+```
+
+#### Option 2: Development Mode (F5 Debugging)
+
+1. Open this folder in VS Code
+2. Run `npm install`
+3. Press `F5` to launch Extension Development Host
+4. Open a `.gql` file in the new window
+
+#### Option 3: Using Make
+
+```bash
+# Quick install
+make install
+
+# Or install for development
+make dev
+```
 
 ## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+### Keyboard Shortcuts
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+| Action | Windows/Linux | macOS |
+|--------|---------------|-------|
+| Run Query | `Ctrl+Enter` | `Cmd+Enter` |
+| Run Selection | `Ctrl+Shift+Enter` | `Cmd+Shift+Enter` |
+| Format Document | `Shift+Alt+F` | `Shift+Option+F` |
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+### Commands (Command Palette)
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+- `Geode: Run GQL Query` - Execute current file
+- `Geode: Run Selected Query` - Execute selection
+- `Geode: Explain Query Plan` - Show execution plan
+- `Geode: Connect to Geode Server` - Connect to database
+- `Geode: Show GQL Documentation` - Open reference panel
+- `Geode: Restart Language Server` - Restart LSP
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+### Snippets
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+Type these prefixes and press `Tab`:
+
+| Prefix | Description |
+|--------|-------------|
+| `match` | Basic MATCH...RETURN |
+| `matchw` | MATCH with WHERE |
+| `matchr` | MATCH with relationship |
+| `create` | CREATE node |
+| `merge` | MERGE with ON CREATE/MATCH |
+| `set` | UPDATE properties |
+| `delete` | DETACH DELETE |
+| `vdist` | Vector distance search |
+| `vknn` | K-nearest neighbors |
+| `groupby` | GROUP BY aggregation |
+| `case` | CASE expression |
+| `shortest` | Shortest path |
+
+## Configuration
+
+Settings in VS Code (`Ctrl+,`):
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `geode.lsp.enabled` | `true` | Enable language server |
+| `geode.lsp.path` | `"geode"` | Path to geode executable |
+| `geode.server.host` | `"localhost"` | Database server host |
+| `geode.server.port` | `3141` | Database server port |
+| `geode.server.autoConnect` | `false` | Auto-connect on startup |
+| `geode.query.timeout` | `30000` | Query timeout (ms) |
+| `geode.format.keywordCase` | `"upper"` | Keyword case (upper/lower/preserve) |
+
+## Troubleshooting
+
+### LSP Not Starting
+
+1. Check geode is installed:
+   ```bash
+   geode lsp --help
+   ```
+
+2. Check Output panel: View -> Output -> "Geode GQL"
+
+3. Verify extension settings for `geode.lsp.path`
+
+### No Syntax Highlighting
+
+1. Check file extension is `.gql`, `.cypher`, `.gcypher`, or `.pgql`
+2. Check bottom-right shows "GQL" or "Cypher" as language
+3. Try: Command Palette -> "Change Language Mode" -> GQL
+
+### Query Execution Fails
+
+1. Ensure Geode server is running: `geode serve`
+2. Check server connection settings
+3. Try `Geode: Connect to Geode Server` command
+
+## Development
+
+```bash
+# Install dependencies
+npm install
+
+# Watch mode (auto-recompile)
+npm run watch
+
+# In another terminal, press F5 in VS Code to debug
+```
+
+### Project Structure
+
+```
+geode-vscode/
+├── package.json            # Extension manifest
+├── tsconfig.json           # TypeScript config
+├── src/
+│   └── extension.ts        # Main extension code
+├── syntaxes/
+│   └── gql.tmLanguage.json # Syntax highlighting
+├── snippets/
+│   └── gql.json            # Code snippets
+├── images/                 # Icons
+└── language-configuration.json
+```
+
+## Supported File Types
+
+| Extension | Language ID |
+|-----------|-------------|
+| `.gql` | gql |
+| `.gcypher` | gql |
+| `.pgql` | gql |
+| `.cypher` | cypher |
 
 ## License
-For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+Apache License 2.0 - See [LICENSE](LICENSE) for details.
+
+Copyright 2024-2025 CodePros

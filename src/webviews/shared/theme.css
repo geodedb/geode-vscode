@@ -1,0 +1,235 @@
+/**
+ * Geode VSCode Theme Integration
+ *
+ * This stylesheet provides seamless integration with VSCode's theming system.
+ * It uses CSS custom properties (variables) that VSCode automatically sets
+ * based on the current color theme.
+ *
+ * Reference: https://code.visualstudio.com/api/extension-guides/webview#theming-webview-content
+ */
+
+/* ============================================================================
+   Base Reset & Typography
+   ============================================================================ */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    font-weight: var(--vscode-font-weight);
+    color: var(--vscode-foreground);
+    background-color: var(--vscode-editor-background);
+    line-height: 1.4;
+}
+
+/* ============================================================================
+   Core Colors (VSCode Theme Variables)
+   ============================================================================ */
+
+:root {
+    /* Primary colors from VSCode theme */
+    --geode-foreground: var(--vscode-foreground);
+    --geode-background: var(--vscode-editor-background);
+    --geode-border: var(--vscode-panel-border, var(--vscode-editorGroup-border));
+
+    /* Interactive element colors */
+    --geode-button-bg: var(--vscode-button-background);
+    --geode-button-fg: var(--vscode-button-foreground);
+    --geode-button-hover: var(--vscode-button-hoverBackground);
+    --geode-button-secondary-bg: var(--vscode-button-secondaryBackground);
+    --geode-button-secondary-fg: var(--vscode-button-secondaryForeground);
+    --geode-button-secondary-hover: var(--vscode-button-secondaryHoverBackground);
+
+    /* Input colors */
+    --geode-input-bg: var(--vscode-input-background);
+    --geode-input-fg: var(--vscode-input-foreground);
+    --geode-input-border: var(--vscode-input-border, transparent);
+    --geode-input-placeholder: var(--vscode-input-placeholderForeground);
+    --geode-input-focus-border: var(--vscode-focusBorder);
+
+    /* List colors */
+    --geode-list-active-bg: var(--vscode-list-activeSelectionBackground);
+    --geode-list-active-fg: var(--vscode-list-activeSelectionForeground);
+    --geode-list-hover-bg: var(--vscode-list-hoverBackground);
+    --geode-list-hover-fg: var(--vscode-list-hoverForeground);
+
+    /* Status colors */
+    --geode-error: var(--vscode-errorForeground, #f44747);
+    --geode-warning: var(--vscode-editorWarning-foreground, #cca700);
+    --geode-info: var(--vscode-editorInfo-foreground, #3794ff);
+    --geode-success: var(--vscode-testing-iconPassed, #89d185);
+
+    /* Table colors */
+    --geode-table-header-bg: var(--vscode-keybindingTable-headerBackground);
+    --geode-table-row-bg: var(--vscode-keybindingTable-rowsBackground);
+    --geode-table-border: var(--vscode-editorGroup-border);
+
+    /* Link colors */
+    --geode-link: var(--vscode-textLink-foreground);
+    --geode-link-active: var(--vscode-textLink-activeForeground);
+
+    /* Code/editor colors */
+    --geode-code-bg: var(--vscode-textCodeBlock-background, var(--vscode-editor-background));
+    --geode-code-fg: var(--vscode-textPreformat-foreground);
+
+    /* Scrollbar colors */
+    --geode-scrollbar-bg: var(--vscode-scrollbarSlider-background);
+    --geode-scrollbar-hover: var(--vscode-scrollbarSlider-hoverBackground);
+    --geode-scrollbar-active: var(--vscode-scrollbarSlider-activeBackground);
+
+    /* Badge colors */
+    --geode-badge-bg: var(--vscode-badge-background);
+    --geode-badge-fg: var(--vscode-badge-foreground);
+
+    /* Panel colors */
+    --geode-panel-bg: var(--vscode-panel-background, var(--vscode-editor-background));
+    --geode-panel-border: var(--vscode-panel-border);
+
+    /* Spacing */
+    --geode-spacing-xs: 4px;
+    --geode-spacing-sm: 8px;
+    --geode-spacing-md: 12px;
+    --geode-spacing-lg: 16px;
+    --geode-spacing-xl: 24px;
+
+    /* Border radius */
+    --geode-radius-sm: 2px;
+    --geode-radius-md: 4px;
+    --geode-radius-lg: 6px;
+
+    /* Shadows */
+    --geode-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.1);
+    --geode-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.15);
+    --geode-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* High contrast theme adjustments */
+.vscode-high-contrast,
+.vscode-high-contrast-light {
+    --geode-border: var(--vscode-contrastBorder);
+    --geode-input-border: var(--vscode-contrastBorder);
+}
+
+/* ============================================================================
+   Scrollbar Styling
+   ============================================================================ */
+
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--geode-scrollbar-bg);
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--geode-scrollbar-hover);
+}
+
+::-webkit-scrollbar-thumb:active {
+    background: var(--geode-scrollbar-active);
+}
+
+/* ============================================================================
+   Typography
+   ============================================================================ */
+
+h1, h2, h3, h4, h5, h6 {
+    margin: 0 0 var(--geode-spacing-md) 0;
+    font-weight: 600;
+    color: var(--geode-foreground);
+}
+
+h1 { font-size: 1.5em; }
+h2 { font-size: 1.3em; }
+h3 { font-size: 1.15em; }
+h4 { font-size: 1.05em; }
+
+p {
+    margin: 0 0 var(--geode-spacing-md) 0;
+}
+
+a {
+    color: var(--geode-link);
+    text-decoration: none;
+}
+
+a:hover,
+a:active {
+    color: var(--geode-link-active);
+    text-decoration: underline;
+}
+
+code {
+    font-family: var(--vscode-editor-font-family);
+    font-size: var(--vscode-editor-font-size);
+    background: var(--geode-code-bg);
+    padding: 2px 4px;
+    border-radius: var(--geode-radius-sm);
+}
+
+pre {
+    font-family: var(--vscode-editor-font-family);
+    font-size: var(--vscode-editor-font-size);
+    background: var(--geode-code-bg);
+    padding: var(--geode-spacing-md);
+    border-radius: var(--geode-radius-md);
+    overflow-x: auto;
+    margin: 0 0 var(--geode-spacing-md) 0;
+}
+
+pre code {
+    background: transparent;
+    padding: 0;
+}
+
+/* ============================================================================
+   Focus States
+   ============================================================================ */
+
+*:focus {
+    outline: 1px solid var(--geode-input-focus-border);
+    outline-offset: -1px;
+}
+
+*:focus:not(:focus-visible) {
+    outline: none;
+}
+
+*:focus-visible {
+    outline: 1px solid var(--geode-input-focus-border);
+    outline-offset: -1px;
+}
+
+/* ============================================================================
+   Panel Container
+   ============================================================================ */
+
+.geode-panel {
+    padding: var(--geode-spacing-lg);
+    height: 100%;
+    overflow: auto;
+}
+
+/* ============================================================================
+   Selection Colors
+   ============================================================================ */
+
+::selection {
+    background-color: var(--vscode-editor-selectionBackground);
+    color: var(--vscode-editor-selectionForeground);
+}

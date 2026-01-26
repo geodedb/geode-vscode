@@ -1,0 +1,220 @@
+{
+  "Match and Return": {
+    "prefix": "match",
+    "body": [
+      "MATCH (${1:n}:${2:Label})",
+      "RETURN ${1:n}"
+    ],
+    "description": "Basic MATCH pattern with RETURN"
+  },
+  "Match with Where": {
+    "prefix": "matchw",
+    "body": [
+      "MATCH (${1:n}:${2:Label})",
+      "WHERE ${1:n}.${3:property} ${4:=} ${5:value}",
+      "RETURN ${1:n}"
+    ],
+    "description": "MATCH with WHERE clause"
+  },
+  "Match Relationship": {
+    "prefix": "matchr",
+    "body": [
+      "MATCH (${1:a}:${2:Label1})-[:${3:REL_TYPE}]->(${4:b}:${5:Label2})",
+      "RETURN ${1:a}, ${4:b}"
+    ],
+    "description": "MATCH with relationship pattern"
+  },
+  "Match Variable Length Path": {
+    "prefix": "matchp",
+    "body": [
+      "MATCH path = (${1:start}:${2:Label})-[:${3:REL_TYPE}*${4:1}..${5:3}]->(${6:end})",
+      "RETURN path"
+    ],
+    "description": "MATCH variable length path"
+  },
+  "Create Node": {
+    "prefix": "create",
+    "body": [
+      "CREATE (${1:n}:${2:Label} {",
+      "  ${3:property}: ${4:value}",
+      "})",
+      "RETURN ${1:n}"
+    ],
+    "description": "Create a new node"
+  },
+  "Create Relationship": {
+    "prefix": "creater",
+    "body": [
+      "MATCH (${1:a}:${2:Label1} {${3:prop}: ${4:value}})",
+      "MATCH (${5:b}:${6:Label2} {${7:prop}: ${8:value}})",
+      "CREATE (${1:a})-[:${9:REL_TYPE}]->(${5:b})"
+    ],
+    "description": "Create relationship between existing nodes"
+  },
+  "Merge Node": {
+    "prefix": "merge",
+    "body": [
+      "MERGE (${1:n}:${2:Label} {${3:property}: ${4:value}})",
+      "ON CREATE SET ${1:n}.created = timestamp()",
+      "ON MATCH SET ${1:n}.updated = timestamp()",
+      "RETURN ${1:n}"
+    ],
+    "description": "MERGE with ON CREATE and ON MATCH"
+  },
+  "Update Properties": {
+    "prefix": "set",
+    "body": [
+      "MATCH (${1:n}:${2:Label} {${3:prop}: ${4:value}})",
+      "SET ${1:n}.${5:property} = ${6:newValue}",
+      "RETURN ${1:n}"
+    ],
+    "description": "Update node properties"
+  },
+  "Delete Node": {
+    "prefix": "delete",
+    "body": [
+      "MATCH (${1:n}:${2:Label} {${3:prop}: ${4:value}})",
+      "DETACH DELETE ${1:n}"
+    ],
+    "description": "Delete node and its relationships"
+  },
+  "Count Aggregation": {
+    "prefix": "count",
+    "body": [
+      "MATCH (${1:n}:${2:Label})",
+      "RETURN count(${1:n}) AS total"
+    ],
+    "description": "Count nodes"
+  },
+  "Group By Aggregation": {
+    "prefix": "groupby",
+    "body": [
+      "MATCH (${1:n}:${2:Label})",
+      "RETURN ${1:n}.${3:property}, count(*) AS count",
+      "ORDER BY count DESC"
+    ],
+    "description": "Group by with count"
+  },
+  "Order and Limit": {
+    "prefix": "orderl",
+    "body": [
+      "MATCH (${1:n}:${2:Label})",
+      "RETURN ${1:n}",
+      "ORDER BY ${1:n}.${3:property} ${4|DESC,ASC|}",
+      "LIMIT ${5:10}"
+    ],
+    "description": "Query with ORDER BY and LIMIT"
+  },
+  "With Clause": {
+    "prefix": "with",
+    "body": [
+      "MATCH (${1:n}:${2:Label})",
+      "WITH ${1:n}, count(*) AS cnt",
+      "WHERE cnt > ${3:1}",
+      "RETURN ${1:n}, cnt"
+    ],
+    "description": "Query with WITH clause for chaining"
+  },
+  "Unwind List": {
+    "prefix": "unwind",
+    "body": [
+      "UNWIND ${1:[1, 2, 3]} AS ${2:item}",
+      "RETURN ${2:item}"
+    ],
+    "description": "UNWIND a list into rows"
+  },
+  "Case Expression": {
+    "prefix": "case",
+    "body": [
+      "CASE ${1:n.property}",
+      "  WHEN ${2:value1} THEN ${3:result1}",
+      "  WHEN ${4:value2} THEN ${5:result2}",
+      "  ELSE ${6:default}",
+      "END AS ${7:alias}"
+    ],
+    "description": "CASE expression"
+  },
+  "Vector Distance": {
+    "prefix": "vdist",
+    "body": [
+      "MATCH (${1:n}:${2:Label})",
+      "WHERE distance(${1:n}.${3:embedding}, \\$queryVector, '${4|L2,cosine,manhattan|}') < ${5:0.5}",
+      "RETURN ${1:n}",
+      "ORDER BY distance(${1:n}.${3:embedding}, \\$queryVector, '${4:L2}')",
+      "LIMIT ${6:10}"
+    ],
+    "description": "Vector similarity search"
+  },
+  "Vector KNN": {
+    "prefix": "vknn",
+    "body": [
+      "MATCH (${1:n}:${2:Label})",
+      "RETURN ${1:n}, distance(${1:n}.${3:embedding}, \\$queryVector, '${4|L2,cosine|}') AS dist",
+      "ORDER BY dist",
+      "LIMIT ${5:10}"
+    ],
+    "description": "K-nearest neighbors vector search"
+  },
+  "Explain Query": {
+    "prefix": "explain",
+    "body": [
+      "EXPLAIN",
+      "MATCH (${1:n}:${2:Label})",
+      "RETURN ${1:n}"
+    ],
+    "description": "EXPLAIN query plan"
+  },
+  "Full Text Search": {
+    "prefix": "fts",
+    "body": [
+      "MATCH (${1:n}:${2:Label})",
+      "WHERE ${1:n}.${3:text} CONTAINS '${4:search term}'",
+      "RETURN ${1:n}"
+    ],
+    "description": "Full text search pattern"
+  },
+  "Optional Match": {
+    "prefix": "optmatch",
+    "body": [
+      "MATCH (${1:n}:${2:Label})",
+      "OPTIONAL MATCH (${1:n})-[:${3:REL}]->(${4:m})",
+      "RETURN ${1:n}, collect(${4:m}) AS related"
+    ],
+    "description": "OPTIONAL MATCH for nullable relationships"
+  },
+  "Union": {
+    "prefix": "union",
+    "body": [
+      "MATCH (${1:a}:${2:Label1})",
+      "RETURN ${1:a}.name AS name",
+      "UNION",
+      "MATCH (${3:b}:${4:Label2})",
+      "RETURN ${3:b}.name AS name"
+    ],
+    "description": "UNION of two queries"
+  },
+  "Shortest Path": {
+    "prefix": "shortest",
+    "body": [
+      "MATCH (${1:start}:${2:Label} {${3:prop}: ${4:value}})",
+      "MATCH (${5:end}:${6:Label} {${7:prop}: ${8:value}})",
+      "MATCH path = shortestPath((${1:start})-[*]-(${5:end}))",
+      "RETURN path"
+    ],
+    "description": "Find shortest path between nodes"
+  },
+  "Create Index": {
+    "prefix": "createindex",
+    "body": [
+      "CREATE INDEX ${1:index_name} FOR (${2:n}:${3:Label}) ON (${2:n}.${4:property})"
+    ],
+    "description": "Create property index"
+  },
+  "Create Constraint": {
+    "prefix": "constraint",
+    "body": [
+      "CREATE CONSTRAINT ${1:constraint_name} FOR (${2:n}:${3:Label}) REQUIRE ${2:n}.${4:property} IS UNIQUE"
+    ],
+    "description": "Create uniqueness constraint"
+  }
+}

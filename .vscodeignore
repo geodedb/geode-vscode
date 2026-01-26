@@ -1,0 +1,14 @@
+.vscode/**
+.vscode-test/**
+src/**/*.ts
+src/test/**
+.gitignore
+**/tsconfig.json
+**/*.map
+zig-cache/**
+zig-out/**
+# Don't exclude node_modules - vsce needs them for dependency bundling
+# node_modules/@types/**
+# node_modules/typescript/**
+# Include webview assets (CSS, JS)
+!src/webviews/**
