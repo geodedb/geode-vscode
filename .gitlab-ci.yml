@@ -1,7 +1,42 @@
+include:
+  # Security scanning
+  - component: gitlab.com/devnw/ci-catalog/security-sast@latest
+    inputs:
+      stage: security
+
+  - component: gitlab.com/devnw/ci-catalog/security-dependency-scanning@latest
+    inputs:
+      stage: security
+
+  - component: gitlab.com/devnw/ci-catalog/security-secrets@latest
+    inputs:
+      stage: security
+
+  - component: gitlab.com/devnw/ci-catalog/security-gitleaks@latest
+
+  # SBOM generation and scanning
+  - component: gitlab.com/devnw/ci-catalog/sbom-generate@latest
+
+  - component: gitlab.com/devnw/ci-catalog/sbom-scan@latest
+    inputs:
+      allow_failure: true
+
+  # Release creation
+  - component: gitlab.com/devnw/ci-catalog/release-semantic@latest
+    inputs:
+      stage: release
+
+default:
+  tags:
+    - company
+    - linux
+
 stages:
   - build
   - test
   - security
+  - sbom
+  - release
 
 build:
   stage: build
@@ -44,15 +79,3 @@ test:
   rules:
     - if: '$CI_COMMIT_BRANCH'
 
-include:
-  - template: Security/SAST.gitlab-ci.yml
-  - template: Security/Secret-Detection.gitlab-ci.yml
-
-variables:
-  SECRET_DETECTION_ENABLED: 'true'
-
-sast:
-  stage: security
-
-secret_detection:
-  stage: security
