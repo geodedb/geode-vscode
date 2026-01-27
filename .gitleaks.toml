@@ -1,0 +1,21 @@
+# Gitleaks Configuration
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2024-2026 DevNW LLC
+
+title = "Gitleaks Configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Global allowlist"
+paths = [
+  '''testdata''',
+  '''tests/.*''',
+  '''node_modules''',
+  '''out''',
+  '''.*\.ts$''',
+  '''.*\.js$''',
+  '''.*\.md$''',
+  '''.*\.log$''',
+]
