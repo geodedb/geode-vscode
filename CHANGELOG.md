@@ -10,8 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.2.0] - 2026-01-28
 
 ### Changed
-- **Package renamed** from `geode-gql` to `@geodedb/vscode`
-- **Publisher** changed to `geodedb` (scoped npm organization)
+- **Package renamed** from `geode-gql` to `geode-vscode` (extension ID: `geodedb.geode-vscode`)
+- **Publisher** changed to `geodedb`
 - Added pre-commit hooks for code quality and version verification
 
 ### Added
