@@ -78,4 +78,3 @@ test:
     - npm run test || true
   rules:
     - if: '$CI_COMMIT_BRANCH'
-

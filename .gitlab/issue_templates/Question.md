@@ -8,11 +8,13 @@
 <!-- Describe what you've already attempted -->
 
 ## Code Example
+
 ```typescript
 // Relevant code if applicable
 ```
 
 ## Environment
+
 - **VS Code Version**:
 - **Extension Version**:
 

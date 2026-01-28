@@ -5,7 +5,7 @@
 If you believe you've found a security vulnerability:
 
 1. **Do not** open a public issue.
-2. Email: security@devnw.com
+2. Email: <security@devnw.com>
 3. Include:
    - affected version/commit
    - reproduction steps or PoC (as safe as possible)

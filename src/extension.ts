@@ -17,6 +17,12 @@ import { registerTimeSeriesPanel } from './panels/TimeSeriesPanel';
 import { ResultsTablePanel, QueryResults } from './panels/ResultsTablePanel';
 import { GraphViewPanel, GraphData, GraphNode, GraphEdge } from './panels/GraphViewPanel';
 import { PerformanceMetricsPanel } from './panels/PerformanceMetricsPanel';
+import {
+    GraphVisualizationPanel,
+    GraphElements,
+    buildExpandQuery,
+    buildRelatedQuery
+} from './panels/GraphVisualizationPanel';
 // Old connection manager - keeping for backward compatibility during transition
 import {
     ConnectionManager as OldConnectionManager,
@@ -177,7 +183,9 @@ export async function activate(context: vscode.ExtensionContext) {
                 extensionUri: context.extensionUri,
                 viewColumn: vscode.ViewColumn.Two
             });
-        })
+        }),
+        vscode.commands.registerCommand('geode.showGraphVisualization', showGraphVisualization),
+        vscode.commands.registerCommand('geode.visualizeQuery', visualizeQueryAsGraph)
     );
 
     // Auto-connect if configured
@@ -1174,6 +1182,253 @@ function getDocumentationHtml(): string {
     </ul>
 </body>
 </html>`;
+}
+
+// ============================================================================
+// Status Bar
+// ============================================================================
+
+// ============================================================================
+// Graph Visualization
+// ============================================================================
+
+/**
+ * Show the graph visualization panel
+ */
+function showGraphVisualization(): GraphVisualizationPanel {
+    const panel = GraphVisualizationPanel.createOrShow({
+        extensionUri: extensionContext.extensionUri,
+        viewColumn: vscode.ViewColumn.Two
+    });
+
+    panel.setOutputChannel(outputChannel);
+
+    // Set up expand callback to query neighbors
+    panel.setExpandCallback(async (nodeId: string, labels: string[], depth: number): Promise<GraphElements | null> => {
+        const client = connectionManager.getClient();
+        if (!client.isConnected()) {
+            vscode.window.showWarningMessage('Not connected to database');
+            return null;
+        }
+
+        try {
+            const query = buildExpandQuery(nodeId, labels, depth);
+            outputChannel.appendLine(`[GraphViz] Expanding node ${nodeId}: ${query}`);
+
+            const result = await client.query(query);
+            const rows = await result.toObjects();
+
+            // Convert rows to graph elements
+            return extractGraphElements(rows);
+        } catch (error: any) {
+            outputChannel.appendLine(`[GraphViz] Expand error: ${error.message}`);
+            return null;
+        }
+    });
+
+    // Set up query related callback
+    panel.setQueryRelatedCallback(async (nodeId: string, relationshipType?: string): Promise<GraphElements | null> => {
+        const client = connectionManager.getClient();
+        if (!client.isConnected()) {
+            vscode.window.showWarningMessage('Not connected to database');
+            return null;
+        }
+
+        try {
+            const query = buildRelatedQuery(nodeId, relationshipType);
+            outputChannel.appendLine(`[GraphViz] Querying related for ${nodeId}: ${query}`);
+
+            const result = await client.query(query);
+            const rows = await result.toObjects();
+
+            return extractGraphElements(rows);
+        } catch (error: any) {
+            outputChannel.appendLine(`[GraphViz] Query related error: ${error.message}`);
+            return null;
+        }
+    });
+
+    return panel;
+}
+
+/**
+ * Execute the current query and show results as graph visualization
+ */
+async function visualizeQueryAsGraph(): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+        vscode.window.showWarningMessage('No active editor');
+        return;
+    }
+
+    const selection = editor.selection;
+    const query = selection.isEmpty
+        ? editor.document.getText()
+        : editor.document.getText(selection);
+
+    if (!query.trim()) {
+        vscode.window.showWarningMessage('No query to visualize');
+        return;
+    }
+
+    const client = connectionManager.getClient();
+
+    if (!client.isConnected()) {
+        // Try to connect first
+        const profiles = connectionManager.getProfiles();
+        if (profiles.length === 0) {
+            vscode.window.showWarningMessage('No connections configured. Add a connection first.');
+            return;
+        }
+
+        const items = profiles.map(p => ({
+            label: p.name,
+            description: `${p.host}:${p.port}`,
+            profile: p
+        }));
+
+        const selected = await vscode.window.showQuickPick(items, {
+            placeHolder: 'Select a connection to visualize graph data'
+        });
+
+        if (!selected) {
+            return;
+        }
+
+        try {
+            await connectionManager.connect(selected.profile.id);
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`Failed to connect: ${error.message}`);
+            return;
+        }
+    }
+
+    outputChannel.appendLine(`\n--- Visualizing Query as Graph ---`);
+    outputChannel.appendLine(query);
+
+    try {
+        const startTime = Date.now();
+        const result = await client.query(query);
+        const duration = Date.now() - startTime;
+        const rows = await result.toObjects();
+
+        outputChannel.appendLine(`Query completed in ${duration}ms, ${rows.length} rows`);
+
+        // Extract graph elements
+        const elements = extractGraphElements(rows);
+
+        if (elements.nodes.length === 0 && elements.edges.length === 0) {
+            vscode.window.showInformationMessage(
+                'Query returned no graph data (nodes or relationships). Results shown in table view.',
+                'Show Table'
+            ).then(action => {
+                if (action === 'Show Table') {
+                    const queryResults: QueryResults = {
+                        columns: result.columnNames || (rows.length > 0 ? Object.keys(rows[0]) : []),
+                        rows: rows,
+                        executionTime: duration,
+                        rowCount: rows.length
+                    };
+                    const tablePanel = ResultsTablePanel.createOrShow({
+                        extensionUri: extensionContext.extensionUri,
+                        viewColumn: vscode.ViewColumn.Two
+                    });
+                    tablePanel.setResults(queryResults, query);
+                }
+            });
+            return;
+        }
+
+        // Show graph visualization
+        const graphPanel = showGraphVisualization();
+        graphPanel.loadElements({
+            nodes: elements.nodes.map(n => ({ data: n })),
+            edges: elements.edges.map(e => ({ data: e }))
+        }, query);
+
+        // Add to query history
+        queryHistoryProvider.addEntry({
+            query: query,
+            duration: duration,
+            rowCount: rows.length,
+            connectionName: connectionManager.getActiveProfile()?.name,
+            success: true
+        });
+
+        vscode.window.showInformationMessage(
+            `Graph: ${elements.nodes.length} nodes, ${elements.edges.length} edges (${duration}ms)`
+        );
+
+    } catch (error: any) {
+        outputChannel.appendLine(`Visualization error: ${error.message}`);
+        vscode.window.showErrorMessage(`Visualization failed: ${error.message}`);
+    }
+}
+
+/**
+ * Extract graph elements from query result rows
+ */
+function extractGraphElements(rows: any[]): { nodes: any[]; edges: any[] } {
+    const nodes: Map<string, any> = new Map();
+    const edges: any[] = [];
+
+    for (const row of rows) {
+        for (const key of Object.keys(row)) {
+            const value = row[key];
+            if (!value || typeof value !== 'object') {
+                continue;
+            }
+
+            // Handle arrays (e.g., paths with multiple relationships)
+            if (Array.isArray(value)) {
+                for (const item of value) {
+                    processGraphItem(item, nodes, edges);
+                }
+            } else {
+                processGraphItem(value, nodes, edges);
+            }
+        }
+    }
+
+    return {
+        nodes: Array.from(nodes.values()),
+        edges: edges
+    };
+}
+
+/**
+ * Process a single item that might be a node or edge
+ */
+function processGraphItem(value: any, nodes: Map<string, any>, edges: any[]): void {
+    if (!value || typeof value !== 'object') {
+        return;
+    }
+
+    // Check if it's a node (has _labels or labels property)
+    if (value._labels || value.labels || (value._id !== undefined && value._start === undefined)) {
+        const nodeId = String(value._id ?? value.id ?? `node-${nodes.size}`);
+        if (!nodes.has(nodeId)) {
+            nodes.set(nodeId, {
+                id: nodeId,
+                labels: value._labels || value.labels || [],
+                properties: value.properties || value
+            });
+        }
+    }
+
+    // Check if it's a relationship/edge (has _type or type and _start/_end)
+    if ((value._type || value.type) &&
+        (value._start !== undefined || value._end !== undefined ||
+         value.source !== undefined || value.target !== undefined)) {
+        const edgeId = String(value._id ?? value.id ?? `edge-${edges.length}`);
+        edges.push({
+            id: edgeId,
+            source: String(value._start ?? value.source ?? value.startNodeId),
+            target: String(value._end ?? value.target ?? value.endNodeId),
+            type: value._type || value.type,
+            properties: value.properties || value
+        });
+    }
 }
 
 // ============================================================================

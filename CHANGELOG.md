@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-01-28
+
+### Changed
+- **Package renamed** from `geode-gql` to `@geodedb/vscode`
+- **Publisher** changed to `geodedb` (scoped npm organization)
+- Added pre-commit hooks for code quality and version verification
+
+### Added
+
+#### High-Performance Graph Visualization
+- **GraphVisualizationPanel**: New WebGL-accelerated graph visualization using Cytoscape.js
+- **Large Graph Support**: Efficiently handles 10,000+ nodes with level-of-detail rendering
+- **Multiple Layouts**: Force-directed, hierarchical (dagre), circular, grid, concentric, breadth-first
+- **Graph Exploration**:
+  - Double-click nodes to expand neighbors
+  - Right-click context menu with expand options (1-hop, 2-hop)
+  - Path finding between nodes with visual highlighting
+  - Node detail side panel with properties and actions
+  - Query related data for selected nodes
+- **Neo4j-Style Rendering**: Nodes colored by label, sized by degree
+- **Interactive Features**:
+  - Search/filter nodes by ID, label, or property
+  - Toggle node labels and physics simulation
+  - Lock node positions
+  - Hide nodes/edges
+  - Clustering for large graphs
+- **Export Options**: PNG and SVG export
+- **Keyboard Shortcut**: `Ctrl+Shift+G` / `Cmd+Shift+G` to visualize query as graph
+
+#### New Commands
+- `Geode: Show Graph Visualization` - Open the graph visualization panel
+- `Geode: Visualize Query as Graph` - Execute query and show results as graph
+
+### Changed
+- Graph data now uses JSON format (preferred) instead of DOT for better structured data handling
+- Results with graph data (nodes/relationships) automatically show graph view option
+
 ## [1.1.0] - 2026-01-27
 
 ### Added

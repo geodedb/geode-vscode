@@ -33,10 +33,10 @@ export class EnhancedSchemaExplorerProvider implements vscode.TreeDataProvider<S
         try {
             this.isLoading = true;
             this.outputChannel.appendLine('Refreshing schema...');
-            
+
             this.schema = await this.clientWrapper.getSchema();
             this._onDidChangeTreeData.fire();
-            
+
             this.outputChannel.appendLine('Schema refreshed successfully');
             vscode.window.showInformationMessage('Schema refreshed');
         } catch (error) {
@@ -117,7 +117,7 @@ export class EnhancedSchemaExplorerProvider implements vscode.TreeDataProvider<S
 
         if (element.contextValue === 'nodeLabelsCategory') {
             // Show all node labels
-            return this.schema.nodeLabels.map(label => 
+            return this.schema.nodeLabels.map(label =>
                 new SchemaTreeItem(
                     `${label.name} (${label.count})`,
                     vscode.TreeItemCollapsibleState.Collapsed,
@@ -139,7 +139,7 @@ export class EnhancedSchemaExplorerProvider implements vscode.TreeDataProvider<S
 
         if (element.contextValue === 'relationshipTypesCategory') {
             // Show all relationship types
-            return this.schema.relationshipTypes.map(relType => 
+            return this.schema.relationshipTypes.map(relType =>
                 new SchemaTreeItem(
                     `${relType.name} (${relType.count})`,
                     vscode.TreeItemCollapsibleState.None,
@@ -161,7 +161,7 @@ export class EnhancedSchemaExplorerProvider implements vscode.TreeDataProvider<S
         if (element.contextValue === 'nodeLabel' && element.data?.labelName) {
             // Show properties for this label
             const properties = this.schema.properties[element.data.labelName] || [];
-            return properties.map(prop => 
+            return properties.map(prop =>
                 new SchemaTreeItem(
                     prop,
                     vscode.TreeItemCollapsibleState.None,
@@ -193,7 +193,7 @@ class SchemaTreeItem extends vscode.TreeItem {
         public readonly data?: any
     ) {
         super(label, collapsibleState);
-        
+
         if (options) {
             this.iconPath = options.iconPath;
             this.contextValue = options.contextValue || type;
@@ -266,7 +266,7 @@ export function registerSchemaExplorerCommands(
                 // Query for relationship details
                 const result = await clientWrapper.query(`
                     MATCH (a)-[r:${relType}]->(b)
-                    RETURN 
+                    RETURN
                         labels(a) as source_labels,
                         labels(b) as target_labels,
                         properties(r) as props
@@ -316,14 +316,14 @@ function generateLabelDetailsHtml(labelName: string, samples: any[]): string {
             <style>
                 body { font-family: var(--vscode-font-family); padding: 20px; }
                 h1 { color: var(--vscode-foreground); }
-                .sample { 
+                .sample {
                     background: var(--vscode-editor-background);
                     border: 1px solid var(--vscode-panel-border);
                     border-radius: 4px;
                     padding: 10px;
                     margin: 10px 0;
                 }
-                pre { 
+                pre {
                     background: var(--vscode-textBlockQuote-background);
                     padding: 10px;
                     border-radius: 4px;
@@ -353,7 +353,7 @@ function generateRelationshipDetailsHtml(relType: string, samples: any[]): strin
             <style>
                 body { font-family: var(--vscode-font-family); padding: 20px; }
                 h1 { color: var(--vscode-foreground); }
-                .sample { 
+                .sample {
                     background: var(--vscode-editor-background);
                     border: 1px solid var(--vscode-panel-border);
                     border-radius: 4px;
@@ -366,7 +366,7 @@ function generateRelationshipDetailsHtml(relType: string, samples: any[]): strin
                     padding: 5px 10px;
                     border-radius: 4px;
                 }
-                pre { 
+                pre {
                     background: var(--vscode-textBlockQuote-background);
                     padding: 10px;
                     border-radius: 4px;

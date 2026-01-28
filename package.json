@@ -1,19 +1,24 @@
 {
-  "name": "geode-gql",
-  "displayName": "Geode GQL",
-  "description": "GQL (Graph Query Language) and Cypher support for Geode graph database - syntax highlighting, LSP, snippets, and query execution",
-  "version": "1.0.0",
-  "publisher": "geode-db",
+  "name": "@geodedb/vscode",
+  "displayName": "Geode for VS Code",
+  "description": "Official VS Code extension for Geode graph database - GQL/Cypher syntax highlighting, LSP, query execution, and graph visualization",
+  "version": "1.2.0",
+  "publisher": "geodedb",
+  "author": "CodePros",
   "icon": "images/geode-icon.png",
   "repository": {
     "type": "git",
-    "url": "https://gitlab.com/devnw/codepros/geode/geode-vscode"
+    "url": "git+https://gitlab.com/devnw/codepros/geode/geode-vscode.git"
   },
-  "homepage": "https://gitlab.com/devnw/codepros/geode/geode-vscode",
+  "homepage": "https://gitlab.com/devnw/codepros/geode",
   "bugs": {
     "url": "https://gitlab.com/devnw/codepros/geode/geode-vscode/-/issues"
   },
   "license": "Apache-2.0",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "engines": {
     "vscode": "^1.75.0"
   },
@@ -368,6 +373,18 @@
         "title": "Execute MCP Tool",
         "category": "Geode",
         "icon": "$(play)"
+      },
+      {
+        "command": "geode.showGraphVisualization",
+        "title": "Show Graph Visualization",
+        "category": "Geode",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "geode.visualizeQuery",
+        "title": "Visualize Query as Graph",
+        "category": "Geode",
+        "icon": "$(graph)"
       }
     ],
     "menus": {
@@ -393,6 +410,11 @@
           "command": "geode.explainQuery",
           "when": "resourceLangId == gql || resourceLangId == cypher",
           "group": "1_run@3"
+        },
+        {
+          "command": "geode.visualizeQuery",
+          "when": "resourceLangId == gql || resourceLangId == cypher",
+          "group": "1_run@4"
         }
       ],
       "commandPalette": [
@@ -581,6 +603,12 @@
         "key": "ctrl+shift+s",
         "mac": "cmd+shift+s",
         "when": "editorTextFocus && (editorLangId == gql || editorLangId == cypher)"
+      },
+      {
+        "command": "geode.visualizeQuery",
+        "key": "ctrl+shift+g",
+        "mac": "cmd+shift+g",
+        "when": "editorTextFocus && (editorLangId == gql || editorLangId == cypher)"
       }
     ],
     "configuration": {
@@ -678,13 +706,13 @@
     },
     "configurationDefaults": {
       "[gql]": {
-        "editor.defaultFormatter": "geode-db.geode-gql",
+        "editor.defaultFormatter": "geodedb.geode-vscode",
         "editor.formatOnSave": true,
         "editor.tabSize": 4,
         "editor.insertSpaces": true
       },
       "[cypher]": {
-        "editor.defaultFormatter": "geode-db.geode-gql",
+        "editor.defaultFormatter": "geodedb.geode-vscode",
         "editor.formatOnSave": true,
         "editor.tabSize": 4,
         "editor.insertSpaces": true
@@ -696,7 +724,10 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src --ext ts",
-    "test": "node ./out/test/runTest.js",
+    "pretest": "npm run compile",
+    "test": "mocha out/test/*.test.js --timeout 30000",
+    "test:unit": "mocha out/test/*.test.js --grep 'Unit Tests' --timeout 30000",
+    "test:integration": "mocha out/test/*.integration.test.js --timeout 60000",
     "package": "vsce package --skip-license",
     "publish": "vsce publish"
   },
@@ -704,10 +735,15 @@
     "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
+    "@types/glob": "^8.1.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "^18.0.0",
     "@types/vscode": "^1.75.0",
+    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/parser": "^8.54.0",
     "@vscode/vsce": "^2.22.0",
+    "eslint": "^9.39.2",
+    "glob": "^13.0.0",
     "mocha": "^11.7.5",
     "typescript": "^5.0.0"
   }

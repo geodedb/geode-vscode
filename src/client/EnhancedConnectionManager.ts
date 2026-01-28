@@ -26,10 +26,10 @@ export class EnhancedConnectionManager {
     private activeProfile: ConnectionProfile | null = null;
     private clientWrapper: GeodeClientWrapper;
     private secretStorage: vscode.SecretStorage;
-    
+
     private _onDidChangeProfiles = new vscode.EventEmitter<void>();
     readonly onDidChangeProfiles = this._onDidChangeProfiles.event;
-    
+
     private _onDidChangeActiveConnection = new vscode.EventEmitter<ConnectionProfile | null>();
     readonly onDidChangeActiveConnection = this._onDidChangeActiveConnection.event;
 
@@ -39,7 +39,7 @@ export class EnhancedConnectionManager {
     ) {
         this.secretStorage = context.secrets;
         this.clientWrapper = new GeodeClientWrapper(outputChannel);
-        
+
         // Listen to client status changes
         this.clientWrapper.onStatusChange((status) => {
             this.handleStatusChange(status);
@@ -51,7 +51,7 @@ export class EnhancedConnectionManager {
      */
     async initialize(): Promise<void> {
         await this.loadProfiles();
-        
+
         // Auto-connect to default profile if configured
         const config = vscode.workspace.getConfiguration('geode');
         if (config.get<boolean>('server.autoConnect', false)) {
@@ -77,17 +77,17 @@ export class EnhancedConnectionManager {
             timeout: profile.timeout || 5000,
             queryTimeout: profile.queryTimeout || 30000
         };
-        
+
         // Store password in secret storage
         if (profile.password) {
             await this.secretStorage.store(`geode.password.${id}`, profile.password);
             delete (fullProfile as any).password; // Don't store password in settings
         }
-        
+
         this.profiles.set(id, fullProfile);
         await this.saveProfiles();
         this._onDidChangeProfiles.fire();
-        
+
         return id;
     }
 
@@ -99,17 +99,17 @@ export class EnhancedConnectionManager {
         if (!profile) {
             throw new Error(`Profile ${id} not found`);
         }
-        
+
         // Update password in secret storage if provided
         if (updates.password) {
             await this.secretStorage.store(`geode.password.${id}`, updates.password);
             delete updates.password;
         }
-        
+
         Object.assign(profile, updates);
         await this.saveProfiles();
         this._onDidChangeProfiles.fire();
-        
+
         // Reconnect if this is the active profile
         if (this.activeProfile?.id === id && this.clientWrapper.isConnected()) {
             await this.reconnect();
@@ -124,15 +124,15 @@ export class EnhancedConnectionManager {
         if (!profile) {
             throw new Error(`Profile ${id} not found`);
         }
-        
+
         // Disconnect if this is the active profile
         if (this.activeProfile?.id === id) {
             await this.disconnect();
         }
-        
+
         // Delete password from secret storage
         await this.secretStorage.delete(`geode.password.${id}`);
-        
+
         this.profiles.delete(id);
         await this.saveProfiles();
         this._onDidChangeProfiles.fire();
@@ -146,29 +146,31 @@ export class EnhancedConnectionManager {
         if (!profile) {
             throw new Error(`Profile ${profileId} not found`);
         }
-        
+
         // Disconnect if already connected
         if (this.clientWrapper.isConnected()) {
             await this.disconnect();
         }
-        
+
         // Get password from secret storage
         const password = await this.secretStorage.get(`geode.password.${profileId}`);
-        
+
         // Build connection config
+        // Only include username/password if they are non-empty strings
+        const username = profile.username?.trim();
         const config: GeodeConfig = {
             host: profile.host,
             port: profile.port,
-            username: profile.username,
-            password: password,
+            username: username && username.length > 0 ? username : undefined,
+            password: password && password.trim().length > 0 ? password.trim() : undefined,
             insecureSkipVerify: profile.insecure || false
         };
-        
+
         try {
             await this.clientWrapper.connect(config);
             this.activeProfile = profile;
             this._onDidChangeActiveConnection.fire(profile);
-            
+
             vscode.window.showInformationMessage(`Connected to ${profile.name}`);
         } catch (error) {
             vscode.window.showErrorMessage(`Failed to connect: ${error}`);
@@ -184,7 +186,7 @@ export class EnhancedConnectionManager {
             await this.clientWrapper.disconnect();
             this.activeProfile = null;
             this._onDidChangeActiveConnection.fire(null);
-            
+
             vscode.window.showInformationMessage('Disconnected from Geode server');
         }
     }
@@ -243,7 +245,7 @@ export class EnhancedConnectionManager {
                 profile.isDefault = false;
             }
         }
-        
+
         // Set new default
         const profile = this.profiles.get(id);
         if (profile) {

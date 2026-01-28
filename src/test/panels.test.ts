@@ -31,8 +31,8 @@ const mockVscode = {
 };
 
 // Test suite for BaseWebviewPanel
-suite('BaseWebviewPanel Tests', () => {
-    test('Panel HTML structure is valid', () => {
+describe('BaseWebviewPanel Tests', () => {
+    it('Panel HTML structure is valid', () => {
         // Test that panel HTML contains required elements
         const html = `
             <!DOCTYPE html>
@@ -54,8 +54,8 @@ suite('BaseWebviewPanel Tests', () => {
 });
 
 // Test suite for PerformanceMetricsPanel
-suite('PerformanceMetricsPanel Tests', () => {
-    test('Performance metrics data structure is valid', () => {
+describe('PerformanceMetricsPanel Tests', () => {
+    it('Performance metrics data structure is valid', () => {
         const metricsData = {
             queryLatency: { avg: 10.5, p50: 8.0, p95: 25.0, p99: 50.0 },
             throughput: { queries_per_sec: 1000, nodes_per_sec: 5000 },
@@ -71,7 +71,7 @@ suite('PerformanceMetricsPanel Tests', () => {
         assert.strictEqual(typeof metricsData.timestamp, 'number');
     });
 
-    test('Metrics chart configuration is valid', () => {
+    it('Metrics chart configuration is valid', () => {
         const chartConfig = {
             type: 'line',
             data: {
@@ -94,7 +94,7 @@ suite('PerformanceMetricsPanel Tests', () => {
         assert.ok(chartConfig.data.datasets.length > 0);
     });
 
-    test('Alert thresholds are properly defined', () => {
+    it('Alert thresholds are properly defined', () => {
         const thresholds = {
             latency: { warning: 100, critical: 500 },
             memory: { warning: 80, critical: 95 },
@@ -108,8 +108,8 @@ suite('PerformanceMetricsPanel Tests', () => {
 });
 
 // Test suite for PathExplorerPanel
-suite('PathExplorerPanel Tests', () => {
-    test('Path query structure is valid', () => {
+describe('PathExplorerPanel Tests', () => {
+    it('Path query structure is valid', () => {
         const pathQuery = {
             startNode: { id: 'node1', labels: ['Person'], properties: { name: 'Alice' } },
             endNode: { id: 'node2', labels: ['Person'], properties: { name: 'Bob' } },
@@ -124,7 +124,7 @@ suite('PathExplorerPanel Tests', () => {
         assert.strictEqual(typeof pathQuery.maxDepth, 'number');
     });
 
-    test('Path result structure is valid', () => {
+    it('Path result structure is valid', () => {
         const pathResult = {
             paths: [
                 {
@@ -149,7 +149,7 @@ suite('PathExplorerPanel Tests', () => {
         assert.strictEqual(pathResult.paths[0].length, 1);
     });
 
-    test('Algorithm options are defined', () => {
+    it('Algorithm options are defined', () => {
         const algorithms = [
             'shortestPath',
             'allShortestPaths',
@@ -163,7 +163,7 @@ suite('PathExplorerPanel Tests', () => {
         assert.strictEqual(algorithms.length, 5);
     });
 
-    test('Visualization config is valid', () => {
+    it('Visualization config is valid', () => {
         const vizConfig = {
             nodeRadius: 30,
             linkDistance: 100,
@@ -184,8 +184,8 @@ suite('PathExplorerPanel Tests', () => {
 });
 
 // Test suite for GraphViewPanel
-suite('GraphViewPanel Tests', () => {
-    test('Graph data structure is valid', () => {
+describe('GraphViewPanel Tests', () => {
+    it('Graph data structure is valid', () => {
         const graphData = {
             nodes: [
                 { id: '1', label: 'Person', properties: { name: 'Alice' } },
@@ -202,7 +202,7 @@ suite('GraphViewPanel Tests', () => {
         assert.strictEqual(graphData.edges.length, 1);
     });
 
-    test('Force layout parameters are valid', () => {
+    it('Force layout parameters are valid', () => {
         const layoutParams = {
             linkDistance: 100,
             chargeStrength: -300,
@@ -217,8 +217,8 @@ suite('GraphViewPanel Tests', () => {
 });
 
 // Test suite for QueryPlanPanel
-suite('QueryPlanPanel Tests', () => {
-    test('Query plan structure is valid', () => {
+describe('QueryPlanPanel Tests', () => {
+    it('Query plan structure is valid', () => {
         const queryPlan = {
             query: 'MATCH (n:Person) RETURN n',
             plan: {
@@ -247,7 +247,7 @@ suite('QueryPlanPanel Tests', () => {
         assert.ok(queryPlan.statistics);
     });
 
-    test('Plan operators are recognized', () => {
+    it('Plan operators are recognized', () => {
         const operators = [
             'ProduceResults',
             'NodeByLabelScan',
@@ -267,8 +267,8 @@ suite('QueryPlanPanel Tests', () => {
 });
 
 // Test suite for ResultsTablePanel
-suite('ResultsTablePanel Tests', () => {
-    test('Results data structure is valid', () => {
+describe('ResultsTablePanel Tests', () => {
+    it('Results data structure is valid', () => {
         const results = {
             columns: ['name', 'age', 'city'],
             rows: [
@@ -285,7 +285,7 @@ suite('ResultsTablePanel Tests', () => {
         assert.strictEqual(results.rows.length, 2);
     });
 
-    test('Pagination config is valid', () => {
+    it('Pagination config is valid', () => {
         const pagination = {
             pageSize: 50,
             currentPage: 1,
@@ -298,7 +298,7 @@ suite('ResultsTablePanel Tests', () => {
         assert.ok(pagination.totalPages >= 1);
     });
 
-    test('Export formats are supported', () => {
+    it('Export formats are supported', () => {
         const formats = ['csv', 'json', 'xlsx'];
         assert.ok(formats.includes('csv'));
         assert.ok(formats.includes('json'));
@@ -306,8 +306,8 @@ suite('ResultsTablePanel Tests', () => {
 });
 
 // Test suite for TimeSeriesPanel
-suite('TimeSeriesPanel Tests', () => {
-    test('Time series data structure is valid', () => {
+describe('TimeSeriesPanel Tests', () => {
+    it('Time series data structure is valid', () => {
         const timeSeries = {
             metric: 'query_latency',
             interval: '1m',
@@ -324,14 +324,14 @@ suite('TimeSeriesPanel Tests', () => {
         assert.strictEqual(timeSeries.dataPoints.length, 3);
     });
 
-    test('Aggregation functions are defined', () => {
+    it('Aggregation functions are defined', () => {
         const aggregations = ['avg', 'sum', 'min', 'max', 'count', 'p50', 'p95', 'p99'];
         assert.ok(aggregations.includes('avg'));
         assert.ok(aggregations.includes('p95'));
         assert.strictEqual(aggregations.length, 8);
     });
 
-    test('Time range presets are valid', () => {
+    it('Time range presets are valid', () => {
         const presets = {
             '5m': 5 * 60 * 1000,
             '15m': 15 * 60 * 1000,
@@ -348,8 +348,8 @@ suite('TimeSeriesPanel Tests', () => {
 });
 
 // Run tests
-suite('Panel Integration Tests', () => {
-    test('All panels can be instantiated', () => {
+describe('Panel Integration Tests', () => {
+    it('All panels can be instantiated', () => {
         // Verify panel types exist
         const panelTypes = [
             'PerformanceMetricsPanel',
@@ -363,7 +363,7 @@ suite('Panel Integration Tests', () => {
         assert.strictEqual(panelTypes.length, 6);
     });
 
-    test('Message protocol is consistent', () => {
+    it('Message protocol is consistent', () => {
         const messageTypes = [
             'update',
             'refresh',

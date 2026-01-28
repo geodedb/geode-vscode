@@ -418,12 +418,16 @@ export class GeodeClientWrapper {
                 args.push('--insecure');
             }
 
-            if (this.config.username) {
-                args.push('-U', this.config.username);
-            }
+            // Only add auth flags if username is a non-empty string
+            const username = this.config.username?.trim();
+            const password = this.config.password?.trim();
 
-            if (this.config.password) {
-                args.push('-P', this.config.password);
+            if (username && username.length > 0) {
+                args.push('-U', username);
+                // Only add password if username is set
+                if (password && password.length > 0) {
+                    args.push('-P', password);
+                }
             }
 
             // Use stdin for query
