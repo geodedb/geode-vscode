@@ -6,18 +6,44 @@ Full-featured GQL (Graph Query Language) and Cypher support for the Geode graph 
 
 ### Language Support
 - **Syntax Highlighting**: Full TextMate grammar for GQL and Cypher
-- **Code Snippets**: 25+ snippets for common query patterns
+- **Code Snippets**: 45+ snippets for common query patterns
 - **Language Server**: Real-time diagnostics, hover docs, completions
+- **Formatting**: Auto-format GQL documents
 
 ### Query Execution
 - **Run Query**: Execute the current file (`Ctrl+Enter` / `Cmd+Enter`)
 - **Run Selection**: Execute selected text (`Ctrl+Shift+Enter`)
 - **Explain Query**: View query execution plan
+- **Results Table**: View results in formatted table panel
+- **Graph Visualization**: Automatic graph view for node/relationship results
 
-### Editor Integration
-- **Status Bar**: Connection status and LSP indicator
-- **Documentation Panel**: Built-in GQL reference
-- **Context Menus**: Right-click to run queries
+### Connection Management
+- **Multiple Profiles**: Save and manage multiple database connections
+- **Secure Credentials**: Passwords stored in VS Code secure storage
+- **Auto-Connect**: Optionally connect on startup
+- **Connection Status**: Status bar shows current connection
+
+### Query Management
+- **Query History**: Track all executed queries with success/failure status
+- **Saved Queries**: Save favorite queries with categories
+- **Export/Import**: Export saved queries to JSON, import from files
+- **Re-run**: Easily re-run queries from history
+
+### Schema Explorer
+- **Live Schema**: Browse node labels and relationship types from database
+- **Properties**: View properties for each label/type
+- **Statistics**: See node and relationship counts
+
+### Performance Tools
+- **Metrics Panel**: Real-time performance metrics dashboard
+- **Query Profiling**: Track slow queries
+- **Latency Histograms**: Visualize query latency distribution
+- **Export Metrics**: Export metrics to JSON
+
+### AI Integration (MCP)
+- **MCP Server**: Model Context Protocol integration for AI assistants
+- **8 MCP Tools**: Query, schema, counts, paths, explain, create nodes/relationships
+- **AI-Assisted**: Let AI assistants interact with your database
 
 ## Installation
 
@@ -32,7 +58,7 @@ Full-featured GQL (Graph Query Language) and Cypher support for the Geode graph 
 
 ### Install Extension
 
-#### Option 1: Build and Install VSIX (Recommended for Testing)
+#### Option 1: Build and Install VSIX (Recommended)
 
 ```bash
 # Install dependencies
@@ -55,16 +81,6 @@ code --install-extension geode-gql-1.0.0.vsix
 3. Press `F5` to launch Extension Development Host
 4. Open a `.gql` file in the new window
 
-#### Option 3: Using Make
-
-```bash
-# Quick install
-make install
-
-# Or install for development
-make dev
-```
-
 ## Usage
 
 ### Keyboard Shortcuts
@@ -74,34 +90,106 @@ make dev
 | Run Query | `Ctrl+Enter` | `Cmd+Enter` |
 | Run Selection | `Ctrl+Shift+Enter` | `Cmd+Shift+Enter` |
 | Format Document | `Shift+Alt+F` | `Shift+Option+F` |
+| Save Query | `Ctrl+Shift+S` | `Cmd+Shift+S` |
 
 ### Commands (Command Palette)
 
+**Query Execution:**
 - `Geode: Run GQL Query` - Execute current file
 - `Geode: Run Selected Query` - Execute selection
 - `Geode: Explain Query Plan` - Show execution plan
+
+**Connection:**
+- `Geode: Add Connection` - Add new connection profile
 - `Geode: Connect to Geode Server` - Connect to database
+- `Geode: Disconnect from Server` - Disconnect
+
+**Tools:**
+- `Geode: Show Performance Metrics` - Open metrics dashboard
 - `Geode: Show GQL Documentation` - Open reference panel
 - `Geode: Restart Language Server` - Restart LSP
+
+**Saved Queries:**
+- `Geode: Save Query` - Save current query
+- `Geode: Export All Queries` - Export to JSON
+- `Geode: Import Queries` - Import from JSON
+
+**MCP (AI Integration):**
+- `Geode: List MCP Tools` - Show available MCP tools
+- `Geode: Execute MCP Tool` - Run an MCP tool
 
 ### Snippets
 
 Type these prefixes and press `Tab`:
 
+**Basic Queries:**
 | Prefix | Description |
 |--------|-------------|
 | `match` | Basic MATCH...RETURN |
 | `matchw` | MATCH with WHERE |
 | `matchr` | MATCH with relationship |
+| `matchp` | Variable length path |
+| `optmatch` | OPTIONAL MATCH |
+
+**Data Modification:**
+| Prefix | Description |
+|--------|-------------|
 | `create` | CREATE node |
+| `creater` | CREATE relationship |
 | `merge` | MERGE with ON CREATE/MATCH |
 | `set` | UPDATE properties |
 | `delete` | DETACH DELETE |
+| `remove` | Remove property |
+
+**Aggregations:**
+| Prefix | Description |
+|--------|-------------|
+| `count` | COUNT aggregation |
+| `groupby` | GROUP BY with count |
+| `collect` | COLLECT into list |
+| `sum` | SUM aggregation |
+| `avg` | AVG aggregation |
+| `minmax` | MIN and MAX |
+
+**Advanced:**
+| Prefix | Description |
+|--------|-------------|
 | `vdist` | Vector distance search |
 | `vknn` | K-nearest neighbors |
-| `groupby` | GROUP BY aggregation |
-| `case` | CASE expression |
 | `shortest` | Shortest path |
+| `allshortest` | All shortest paths |
+| `exists` | EXISTS subquery |
+| `case` | CASE expression |
+
+**Transactions:**
+| Prefix | Description |
+|--------|-------------|
+| `tx` | BEGIN/COMMIT block |
+| `txrollback` | BEGIN/ROLLBACK block |
+
+**Performance:**
+| Prefix | Description |
+|--------|-------------|
+| `explain` | EXPLAIN query |
+| `profile` | PROFILE query |
+
+**Utilities:**
+| Prefix | Description |
+|--------|-------------|
+| `page` | Pagination (SKIP/LIMIT) |
+| `datetime` | Date/time functions |
+| `stringfn` | String functions |
+| `coalesce` | Handle nulls |
+| `loadcsv` | LOAD CSV |
+
+## Sidebar Views
+
+The Geode sidebar (click the database icon) contains:
+
+1. **Connections** - Manage database connections
+2. **Schema Explorer** - Browse database schema
+3. **Query History** - View executed queries
+4. **Saved Queries** - Access saved/favorite queries
 
 ## Configuration
 
@@ -114,8 +202,11 @@ Settings in VS Code (`Ctrl+,`):
 | `geode.server.host` | `"localhost"` | Database server host |
 | `geode.server.port` | `3141` | Database server port |
 | `geode.server.autoConnect` | `false` | Auto-connect on startup |
+| `geode.server.insecure` | `false` | Skip TLS verification |
 | `geode.query.timeout` | `30000` | Query timeout (ms) |
-| `geode.format.keywordCase` | `"upper"` | Keyword case (upper/lower/preserve) |
+| `geode.query.maxResults` | `1000` | Max results to display |
+| `geode.format.keywordCase` | `"upper"` | Keyword case |
+| `geode.format.indentSize` | `2` | Indent size |
 
 ## Troubleshooting
 
@@ -140,7 +231,15 @@ Settings in VS Code (`Ctrl+,`):
 
 1. Ensure Geode server is running: `geode serve`
 2. Check server connection settings
-3. Try `Geode: Connect to Geode Server` command
+3. Add a connection profile via the Connections view
+4. Check Output panel for detailed error messages
+
+### Connection Issues
+
+1. Verify server is running and accessible
+2. Check host and port settings
+3. For TLS issues, try enabling `geode.server.insecure` temporarily
+4. Check firewall settings
 
 ## Development
 
@@ -158,15 +257,32 @@ npm run watch
 
 ```
 geode-vscode/
-├── package.json            # Extension manifest
-├── tsconfig.json           # TypeScript config
+├── package.json                    # Extension manifest
+├── tsconfig.json                   # TypeScript config
 ├── src/
-│   └── extension.ts        # Main extension code
+│   ├── extension.ts                # Main extension entry
+│   ├── client/
+│   │   ├── GeodeClientWrapper.ts   # CLI-based database client
+│   │   └── EnhancedConnectionManager.ts
+│   ├── connections/
+│   │   ├── ConnectionManager.ts    # Connection profile management
+│   │   └── ConnectionsTreeProvider.ts
+│   ├── views/
+│   │   ├── SchemaExplorerProvider.ts
+│   │   ├── EnhancedSchemaExplorerProvider.ts
+│   │   ├── QueryHistoryProvider.ts
+│   │   └── SavedQueriesProvider.ts
+│   ├── panels/
+│   │   ├── ResultsTablePanel.ts    # Query results display
+│   │   ├── GraphViewPanel.ts       # Graph visualization
+│   │   ├── PerformanceMetricsPanel.ts
+│   │   └── QueryPlanPanel.ts
+│   └── mcp/
+│       └── GeodeMCPServer.ts       # MCP integration
 ├── syntaxes/
-│   └── gql.tmLanguage.json # Syntax highlighting
+│   └── gql.tmLanguage.json         # Syntax highlighting
 ├── snippets/
-│   └── gql.json            # Code snippets
-├── images/                 # Icons
+│   └── gql.json                    # Code snippets (45+)
 └── language-configuration.json
 ```
 
@@ -179,8 +295,23 @@ geode-vscode/
 | `.pgql` | gql |
 | `.cypher` | cypher |
 
+## MCP Tools for AI Assistants
+
+The extension provides MCP (Model Context Protocol) tools for AI integration:
+
+| Tool | Description |
+|------|-------------|
+| `geode_query` | Execute GQL queries |
+| `geode_schema` | Get database schema |
+| `geode_count_nodes` | Count nodes by label |
+| `geode_count_relationships` | Count relationships by type |
+| `geode_find_paths` | Find paths between nodes |
+| `geode_explain` | Get query execution plan |
+| `geode_create_node` | Create new nodes |
+| `geode_create_relationship` | Create relationships |
+
 ## License
 
 Apache License 2.0 - See [LICENSE](LICENSE) for details.
 
-Copyright 2024-2025 CodePros
+Copyright 2024-2026 CodePros

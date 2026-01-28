@@ -268,9 +268,10 @@ export class ConnectionManager {
 
     /**
      * Build the DSN string for the connection
+     * Note: Geode always uses TLS, so we always use geode:// prefix
      */
     buildDsn(profile: ConnectionProfile, password?: string): string {
-        let dsn = profile.useTls ? 'geodes://' : 'geode://';
+        let dsn = 'geode://';
 
         if (profile.username) {
             dsn += encodeURIComponent(profile.username);

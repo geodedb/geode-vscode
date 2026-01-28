@@ -8,39 +8,130 @@ import {
     ServerOptions,
     TransportKind,
     ErrorAction,
-    CloseAction
+    CloseAction,
+    RevealOutputChannelOn
 } from 'vscode-languageclient/node';
 import { registerSchemaExplorer } from './views/SchemaExplorerProvider';
 import { registerQueryPlanPanel } from './panels/QueryPlanPanel';
 import { registerTimeSeriesPanel } from './panels/TimeSeriesPanel';
+import { ResultsTablePanel, QueryResults } from './panels/ResultsTablePanel';
+import { GraphViewPanel, GraphData, GraphNode, GraphEdge } from './panels/GraphViewPanel';
+import { PerformanceMetricsPanel } from './panels/PerformanceMetricsPanel';
+// Old connection manager - keeping for backward compatibility during transition
 import {
-    ConnectionManager,
+    ConnectionManager as OldConnectionManager,
     ConnectionProfile,
     registerConnectionsView,
     ConnectionsTreeProvider
 } from './connections';
 
+// New enhanced components
+import { GeodeClientWrapper } from './client/GeodeClientWrapper';
+import { EnhancedConnectionManager } from './client/EnhancedConnectionManager';
+import {
+    EnhancedSchemaExplorerProvider,
+    registerSchemaExplorerCommands
+} from './views/EnhancedSchemaExplorerProvider';
+import {
+    QueryHistoryProvider,
+    registerQueryHistoryCommands
+} from './views/QueryHistoryProvider';
+import {
+    SavedQueriesProvider,
+    registerSavedQueriesCommands
+} from './views/SavedQueriesProvider';
+import { GeodeMCPServer, registerMCPServer } from './mcp/GeodeMCPServer';
+
 let client: LanguageClient | undefined;
 let statusBarItem: vscode.StatusBarItem;
 let outputChannel: vscode.OutputChannel;
-let connectionManager: ConnectionManager;
+let connectionManager: EnhancedConnectionManager; // Using new manager
 let connectionsTreeProvider: ConnectionsTreeProvider;
+let schemaExplorer: EnhancedSchemaExplorerProvider; // New schema explorer
+let queryHistoryProvider: QueryHistoryProvider; // Query history tracking
+let savedQueriesProvider: SavedQueriesProvider; // Saved queries management
+let mcpServer: GeodeMCPServer; // MCP server for AI integration
 let isConnected = false;
+let extensionContext: vscode.ExtensionContext; // Store context for panel access
 
 const gqlExtensions = new Set(['.gql', '.gcypher', '.pgql']);
 const cypherExtensions = new Set(['.cypher']);
 
 export async function activate(context: vscode.ExtensionContext) {
+    extensionContext = context; // Store for later use
     outputChannel = vscode.window.createOutputChannel('Geode GQL');
     context.subscriptions.push(outputChannel);
 
-    // Initialize connection manager
-    connectionManager = new ConnectionManager(context, outputChannel);
+    outputChannel.appendLine('Activating Geode GQL extension with enhanced components...');
+
+    // Initialize NEW enhanced connection manager
+    connectionManager = new EnhancedConnectionManager(context, outputChannel);
     await connectionManager.initialize();
     context.subscriptions.push({ dispose: () => connectionManager.dispose() });
 
+    outputChannel.appendLine('Enhanced connection manager initialized');
+
+    // Initialize enhanced schema explorer
+    schemaExplorer = new EnhancedSchemaExplorerProvider(
+        connectionManager.getClient(),
+        outputChannel
+    );
+
+    // Register schema explorer tree view
+    const schemaTreeView = vscode.window.createTreeView('geodeSchemaExplorer', {
+        treeDataProvider: schemaExplorer,
+        showCollapseAll: true
+    });
+    context.subscriptions.push(schemaTreeView);
+
+    // Register schema explorer commands
+    registerSchemaExplorerCommands(context, schemaExplorer, connectionManager.getClient());
+
+    outputChannel.appendLine('Enhanced schema explorer registered');
+
+    // Initialize query history provider
+    queryHistoryProvider = new QueryHistoryProvider(context);
+    const historyTreeView = vscode.window.createTreeView('geodeQueryHistory', {
+        treeDataProvider: queryHistoryProvider,
+        showCollapseAll: false
+    });
+    context.subscriptions.push(historyTreeView);
+    registerQueryHistoryCommands(context, queryHistoryProvider);
+    outputChannel.appendLine('Query history provider registered');
+
+    // Initialize saved queries provider
+    savedQueriesProvider = new SavedQueriesProvider(context);
+    const savedQueriesTreeView = vscode.window.createTreeView('geodeSavedQueries', {
+        treeDataProvider: savedQueriesProvider,
+        showCollapseAll: true
+    });
+    context.subscriptions.push(savedQueriesTreeView);
+    registerSavedQueriesCommands(context, savedQueriesProvider);
+    outputChannel.appendLine('Saved queries provider registered');
+
+    // Initialize MCP server for AI assistant integration
+    mcpServer = registerMCPServer(context, connectionManager.getClient(), outputChannel);
+    outputChannel.appendLine('MCP server registered');
+
+    // Listen to connection changes and refresh schema
+    connectionManager.onDidChangeActiveConnection(profile => {
+        if (profile) {
+            isConnected = true;
+            updateStatusBar('connected', profile as any); // Type assertion for compatibility
+            // Auto-refresh schema when connected
+            schemaExplorer.refresh().catch(err => {
+                outputChannel.appendLine(`Schema refresh failed: ${err}`);
+            });
+        } else {
+            isConnected = false;
+            updateStatusBar('disconnected');
+            schemaExplorer.clear();
+        }
+        // Update context for menu visibility
+        vscode.commands.executeCommand('setContext', 'geode.hasActiveConnection', isConnected);
+    });
+
     // Ensure files with GQL-ish extensions don't get hijacked by SQL/Postgres modes
-    // and that the language server activates even when VS Code guesses wrong.
     context.subscriptions.push(
         vscode.workspace.onDidOpenTextDocument(ensureGeodeLanguageMode)
     );
@@ -55,27 +146,14 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(statusBarItem);
     updateStatusBar('disconnected');
 
-    // Register connections view and commands
+    // Register connections view and commands (using compatibility layer)
     connectionsTreeProvider = registerConnectionsView(
         context,
-        connectionManager,
+        connectionManager as any as OldConnectionManager, // Type bridge for compatibility
         outputChannel,
         handleConnect,
         handleDisconnect
     );
-
-    // Update status bar when active connection changes
-    connectionManager.onDidChangeActiveConnection((profile) => {
-        if (profile && isConnected) {
-            updateStatusBar('connected', profile);
-        } else if (profile) {
-            updateStatusBar('disconnected', profile);
-        } else {
-            updateStatusBar('disconnected');
-        }
-        // Update context for menu visibility
-        vscode.commands.executeCommand('setContext', 'geode.hasActiveConnection', isConnected);
-    });
 
     // Start LSP if enabled
     const config = vscode.workspace.getConfiguration('geode');
@@ -93,28 +171,37 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('geode.showDocumentation', showDocumentation),
         vscode.commands.registerCommand('geode.explainQuery', explainQuery),
         vscode.commands.registerCommand('geode.restartLsp', () => restartLanguageServer(context)),
-        vscode.commands.registerCommand('geode.runFile', runFile)
+        vscode.commands.registerCommand('geode.runFile', runFile),
+        vscode.commands.registerCommand('geode.showPerformanceMetrics', () => {
+            PerformanceMetricsPanel.createOrShow({
+                extensionUri: context.extensionUri,
+                viewColumn: vscode.ViewColumn.Two
+            });
+        })
     );
 
     // Auto-connect if configured
     if (config.get<boolean>('server.autoConnect', false)) {
-        const defaultConn = connectionManager.getDefaultConnection();
-        if (defaultConn) {
-            const password = await connectionManager.getPassword(defaultConn.id);
-            await handleConnect(defaultConn, password);
+        const defaultProfile = connectionManager.getDefaultProfile();
+        if (defaultProfile) {
+            try {
+                await connectionManager.connect(defaultProfile.id);
+            } catch (error) {
+                outputChannel.appendLine(`Auto-connect failed: ${error}`);
+            }
         }
     }
 
-    // Register Schema Explorer TreeView (#76)
+    // Register Schema Explorer TreeView (old implementation for backward compatibility)
     registerSchemaExplorer(context);
 
-    // Register Query Plan Visualization Panel (#75)
+    // Register Query Plan Visualization Panel
     registerQueryPlanPanel(context);
 
-    // Register Time Series Analytics Panel (#74)
+    // Register Time Series Analytics Panel
     registerTimeSeriesPanel(context);
 
-    outputChannel.appendLine('Geode GQL extension activated');
+    outputChannel.appendLine('Geode GQL extension activated successfully');
 }
 
 export function deactivate(): Thenable<void> | undefined {
@@ -581,50 +668,193 @@ async function executeMultipleStatements(statements: string[]): Promise<void> {
 }
 
 async function executeQuery(query: string) {
-    // Get active connection or fall back to settings
-    const activeConnection = connectionManager.getActiveConnection();
+    const client = connectionManager.getClient();
 
-    if (!activeConnection) {
-        const result = await vscode.window.showWarningMessage(
-            'No connection configured. Would you like to add one?',
-            'Add Connection',
-            'Cancel'
-        );
-        if (result === 'Add Connection') {
-            await vscode.commands.executeCommand('geode.connections.add');
-        }
-        return;
-    }
+    if (!client.isConnected()) {
+        // Get existing connection profiles
+        const profiles = connectionManager.getProfiles();
 
-    if (!isConnected) {
-        const result = await vscode.window.showWarningMessage(
-            `Not connected to ${activeConnection.name}. Connect now?`,
-            'Connect',
-            'Cancel'
-        );
-        if (result === 'Connect') {
-            const password = await connectionManager.getPassword(activeConnection.id);
-            const success = await handleConnect(activeConnection, password);
-            if (!success) {
-                return;
+        if (profiles.length === 0) {
+            // No existing connections, prompt to add one
+            const result = await vscode.window.showWarningMessage(
+                'No connections configured. Would you like to add one?',
+                'Add Connection',
+                'Cancel'
+            );
+            if (result === 'Add Connection') {
+                await vscode.commands.executeCommand('geode.connections.add');
             }
-        } else {
+            return;
+        }
+
+        // Show existing connections to choose from
+        const items = [
+            ...profiles.map(p => ({
+                label: p.name,
+                description: `${p.host}:${p.port}`,
+                detail: p.isDefault ? '$(star) Default' : undefined,
+                profile: p
+            })),
+            {
+                label: '$(add) Add New Connection...',
+                description: 'Create a new connection profile',
+                profile: null as any
+            }
+        ];
+
+        const selected = await vscode.window.showQuickPick(items, {
+            placeHolder: 'Select a connection or add a new one',
+            title: 'Connect to Geode Server'
+        });
+
+        if (!selected) {
+            return; // Cancelled
+        }
+
+        if (!selected.profile) {
+            // Add new connection
+            await vscode.commands.executeCommand('geode.connections.add');
+            return;
+        }
+
+        // Connect to the selected profile
+        try {
+            await connectionManager.connect(selected.profile.id);
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`Failed to connect: ${error.message}`);
             return;
         }
     }
 
-    outputChannel.appendLine(`\n--- Executing Query on ${activeConnection.name} ---`);
+    const activeProfile = connectionManager.getActiveProfile();
+    outputChannel.appendLine(`\n--- Executing Query on ${activeProfile?.name || 'Geode'} ---`);
     outputChannel.appendLine(query);
     outputChannel.appendLine('---');
 
     try {
-        const password = await connectionManager.getPassword(activeConnection.id);
-        const result = await runGeodeQueryWithProfile(query, activeConnection, password);
-        showQueryResults(result);
-    } catch (error) {
-        outputChannel.appendLine(`Error: ${error}`);
-        vscode.window.showErrorMessage(`Query failed: ${error}`);
+        const startTime = Date.now();
+        const result = await client.query(query);
+        const duration = Date.now() - startTime;
+
+        outputChannel.appendLine(`Query completed in ${duration}ms`);
+
+        // Convert result to displayable format
+        const rows = await result.toObjects();
+        const columns = result.columnNames || (rows.length > 0 ? Object.keys(rows[0]) : []);
+
+        outputChannel.appendLine(`Returned ${rows.length} rows`);
+
+        // Prepare results for table panel
+        const queryResults: QueryResults = {
+            columns: columns,
+            rows: rows,
+            executionTime: duration,
+            rowCount: rows.length
+        };
+
+        // Show results in table panel
+        const extensionUri = extensionContext.extensionUri;
+        const tablePanel = ResultsTablePanel.createOrShow({
+            extensionUri,
+            viewColumn: vscode.ViewColumn.Two,
+            preserveFocus: true
+        });
+        tablePanel.setResults(queryResults, query);
+
+        // Check if result contains graph data and show graph view
+        const graphData = extractGraphData(rows);
+        if (graphData && (graphData.nodes.length > 0 || graphData.edges.length > 0)) {
+            const graphPanel = GraphViewPanel.createOrShow({
+                extensionUri,
+                viewColumn: vscode.ViewColumn.Three,
+                preserveFocus: true
+            });
+            graphPanel.setGraphData(graphData, query);
+        }
+
+        // Add to query history
+        queryHistoryProvider.addEntry({
+            query: query,
+            duration: duration,
+            rowCount: rows.length,
+            connectionName: activeProfile?.name,
+            success: true
+        });
+
+        vscode.window.showInformationMessage(
+            `Query returned ${rows.length} rows in ${duration}ms`
+        );
+    } catch (error: any) {
+        outputChannel.appendLine(`Error: ${error.message || error}`);
+        outputChannel.appendLine(error.stack || '');
+
+        // Add failed query to history
+        queryHistoryProvider.addEntry({
+            query: query,
+            connectionName: activeProfile?.name,
+            success: false,
+            error: error.message || String(error)
+        });
+
+        vscode.window.showErrorMessage(
+            `Query failed: ${error.message || error}`,
+            'Show Output'
+        ).then(action => {
+            if (action === 'Show Output') {
+                outputChannel.show();
+            }
+        });
     }
+}
+
+/**
+ * Extract graph data (nodes and edges) from query result rows
+ */
+function extractGraphData(rows: any[]): GraphData | null {
+    const nodes: Map<string | number, GraphNode> = new Map();
+    const edges: GraphEdge[] = [];
+
+    for (const row of rows) {
+        for (const key of Object.keys(row)) {
+            const value = row[key];
+            if (!value || typeof value !== 'object') {
+                continue;
+            }
+
+            // Check if it's a node (has _labels or labels property)
+            if (value._labels || value.labels || value._id !== undefined) {
+                const nodeId = value._id ?? value.id ?? `node-${nodes.size}`;
+                if (!nodes.has(nodeId)) {
+                    nodes.set(nodeId, {
+                        id: nodeId,
+                        labels: value._labels || value.labels || [],
+                        properties: value.properties || value
+                    });
+                }
+            }
+
+            // Check if it's a relationship/edge (has _type or type and _start/_end)
+            if ((value._type || value.type) && (value._start !== undefined || value._end !== undefined || value.source !== undefined || value.target !== undefined)) {
+                const edgeId = value._id ?? value.id ?? `edge-${edges.length}`;
+                edges.push({
+                    id: edgeId,
+                    source: value._start ?? value.source ?? value.startNodeId,
+                    target: value._end ?? value.target ?? value.endNodeId,
+                    type: value._type || value.type,
+                    properties: value.properties || value
+                });
+            }
+        }
+    }
+
+    if (nodes.size === 0 && edges.length === 0) {
+        return null;
+    }
+
+    return {
+        nodes: Array.from(nodes.values()),
+        edges: edges
+    };
 }
 
 function runGeodeQuery(query: string, host: string, port: number, timeout: number): Promise<string> {
@@ -740,17 +970,17 @@ async function handleConnect(profile: ConnectionProfile, password?: string): Pro
     updateStatusBar('connecting', profile);
 
     try {
-        // Test connection with a simple query
-        await runGeodeQueryWithProfile('RETURN 1', profile, password);
+        // Use the enhanced connection manager to connect
+        await connectionManager.connect(profile.id);
         isConnected = true;
         updateStatusBar('connected', profile);
         await vscode.commands.executeCommand('setContext', 'geode.hasActiveConnection', true);
         vscode.window.showInformationMessage(`Connected to ${profile.name}`);
         return true;
-    } catch (error) {
+    } catch (error: any) {
         isConnected = false;
         updateStatusBar('error', profile);
-        vscode.window.showErrorMessage(`Failed to connect to ${profile.name}: ${error}`);
+        vscode.window.showErrorMessage(`Failed to connect to ${profile.name}: ${error.message || error}`);
         return false;
     }
 }
@@ -758,7 +988,8 @@ async function handleConnect(profile: ConnectionProfile, password?: string): Pro
 /**
  * Handle disconnecting from the current server
  */
-function handleDisconnect(): void {
+async function handleDisconnect(): Promise<void> {
+    await connectionManager.disconnect();
     isConnected = false;
     updateStatusBar('disconnected');
     vscode.commands.executeCommand('setContext', 'geode.hasActiveConnection', false);

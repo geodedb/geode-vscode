@@ -216,5 +216,232 @@
       "CREATE CONSTRAINT ${1:constraint_name} FOR (${2:n}:${3:Label}) REQUIRE ${2:n}.${4:property} IS UNIQUE"
     ],
     "description": "Create uniqueness constraint"
+  },
+  "Transaction Block": {
+    "prefix": "tx",
+    "body": [
+      "// Transaction",
+      "BEGIN",
+      "${1:// Your queries here}",
+      "COMMIT"
+    ],
+    "description": "Transaction block with BEGIN/COMMIT"
+  },
+  "Rollback Transaction": {
+    "prefix": "txrollback",
+    "body": [
+      "BEGIN",
+      "${1:// Your queries here}",
+      "ROLLBACK"
+    ],
+    "description": "Transaction with ROLLBACK"
+  },
+  "Profile Query": {
+    "prefix": "profile",
+    "body": [
+      "PROFILE",
+      "MATCH (${1:n}:${2:Label})",
+      "RETURN ${1:n}"
+    ],
+    "description": "PROFILE query for performance analysis"
+  },
+  "Collect Aggregation": {
+    "prefix": "collect",
+    "body": [
+      "MATCH (${1:n}:${2:Label})-[:${3:REL}]->(${4:m})",
+      "RETURN ${1:n}, collect(${4:m}) AS ${5:items}"
+    ],
+    "description": "Collect related nodes into a list"
+  },
+  "Sum Aggregation": {
+    "prefix": "sum",
+    "body": [
+      "MATCH (${1:n}:${2:Label})",
+      "RETURN sum(${1:n}.${3:property}) AS total"
+    ],
+    "description": "Sum numeric property"
+  },
+  "Average Aggregation": {
+    "prefix": "avg",
+    "body": [
+      "MATCH (${1:n}:${2:Label})",
+      "RETURN avg(${1:n}.${3:property}) AS average"
+    ],
+    "description": "Average of numeric property"
+  },
+  "Min Max": {
+    "prefix": "minmax",
+    "body": [
+      "MATCH (${1:n}:${2:Label})",
+      "RETURN min(${1:n}.${3:property}) AS minimum, max(${1:n}.${3:property}) AS maximum"
+    ],
+    "description": "Find min and max values"
+  },
+  "Exists Subquery": {
+    "prefix": "exists",
+    "body": [
+      "MATCH (${1:n}:${2:Label})",
+      "WHERE EXISTS {",
+      "  MATCH (${1:n})-[:${3:REL}]->(${4:m}:${5:OtherLabel})",
+      "  WHERE ${4:m}.${6:property} = ${7:value}",
+      "}",
+      "RETURN ${1:n}"
+    ],
+    "description": "EXISTS subquery pattern"
+  },
+  "Count Subquery": {
+    "prefix": "countq",
+    "body": [
+      "MATCH (${1:n}:${2:Label})",
+      "WHERE COUNT {",
+      "  MATCH (${1:n})-[:${3:REL}]->()",
+      "} > ${4:5}",
+      "RETURN ${1:n}"
+    ],
+    "description": "COUNT subquery for filtering"
+  },
+  "All Shortest Paths": {
+    "prefix": "allshortest",
+    "body": [
+      "MATCH (${1:start}:${2:Label} {${3:prop}: ${4:value}})",
+      "MATCH (${5:end}:${6:Label} {${7:prop}: ${8:value}})",
+      "MATCH paths = allShortestPaths((${1:start})-[*]-(${5:end}))",
+      "RETURN paths"
+    ],
+    "description": "Find all shortest paths between nodes"
+  },
+  "Pattern Comprehension": {
+    "prefix": "listcomp",
+    "body": [
+      "MATCH (${1:n}:${2:Label})",
+      "RETURN ${1:n}, [(${1:n})-[:${3:REL}]->(${4:m}) | ${4:m}.${5:property}] AS ${6:related}"
+    ],
+    "description": "Pattern comprehension (list comprehension)"
+  },
+  "Foreach Loop": {
+    "prefix": "foreach",
+    "body": [
+      "MATCH (${1:n}:${2:Label})",
+      "FOREACH (${3:item} IN ${4:list} |",
+      "  CREATE (${1:n})-[:${5:REL}]->(:${6:NewLabel} {value: ${3:item}})",
+      ")"
+    ],
+    "description": "FOREACH loop for batch operations"
+  },
+  "Call Procedure": {
+    "prefix": "call",
+    "body": [
+      "CALL ${1:db.schema.nodeTypeProperties}()",
+      "YIELD ${2:nodeType}, ${3:propertyName}, ${4:propertyTypes}",
+      "RETURN ${2:nodeType}, ${3:propertyName}"
+    ],
+    "description": "Call a procedure with YIELD"
+  },
+  "Load CSV": {
+    "prefix": "loadcsv",
+    "body": [
+      "LOAD CSV WITH HEADERS FROM '${1:file:///path/to/file.csv}' AS row",
+      "CREATE (n:${2:Label} {",
+      "  ${3:property}: row.${4:column}",
+      "})"
+    ],
+    "description": "Load data from CSV file"
+  },
+  "Create Graph": {
+    "prefix": "creategraph",
+    "body": [
+      "CREATE GRAPH ${1:graphName} {",
+      "  (${2:n}:${3:Label} {${4:prop}: ${5:value}}),",
+      "  (${6:m}:${7:Label2} {${8:prop}: ${9:value}}),",
+      "  (${2:n})-[:${10:REL}]->(${6:m})",
+      "}"
+    ],
+    "description": "Create a named graph"
+  },
+  "Use Graph": {
+    "prefix": "usegraph",
+    "body": [
+      "USE GRAPH ${1:graphName}",
+      "MATCH (n)",
+      "RETURN n"
+    ],
+    "description": "Use a specific graph"
+  },
+  "Drop Graph": {
+    "prefix": "dropgraph",
+    "body": [
+      "DROP GRAPH ${1:graphName}"
+    ],
+    "description": "Drop a named graph"
+  },
+  "Date Functions": {
+    "prefix": "datetime",
+    "body": [
+      "RETURN datetime() AS now,",
+      "       date() AS today,",
+      "       time() AS currentTime,",
+      "       datetime().year AS year,",
+      "       datetime().month AS month,",
+      "       datetime().day AS day"
+    ],
+    "description": "Date and time functions"
+  },
+  "String Functions": {
+    "prefix": "stringfn",
+    "body": [
+      "MATCH (${1:n}:${2:Label})",
+      "RETURN ${1:n}.${3:name},",
+      "       toUpper(${1:n}.${3:name}) AS upper,",
+      "       toLower(${1:n}.${3:name}) AS lower,",
+      "       trim(${1:n}.${3:name}) AS trimmed,",
+      "       size(${1:n}.${3:name}) AS length"
+    ],
+    "description": "Common string functions"
+  },
+  "Coalesce Null": {
+    "prefix": "coalesce",
+    "body": [
+      "MATCH (${1:n}:${2:Label})",
+      "RETURN coalesce(${1:n}.${3:property}, ${4:'default'}) AS ${5:value}"
+    ],
+    "description": "Handle null with coalesce"
+  },
+  "Pagination": {
+    "prefix": "page",
+    "body": [
+      "MATCH (${1:n}:${2:Label})",
+      "RETURN ${1:n}",
+      "ORDER BY ${1:n}.${3:property}",
+      "SKIP ${4:0}",
+      "LIMIT ${5:10}"
+    ],
+    "description": "Pagination with SKIP and LIMIT"
+  },
+  "Remove Property": {
+    "prefix": "remove",
+    "body": [
+      "MATCH (${1:n}:${2:Label} {${3:prop}: ${4:value}})",
+      "REMOVE ${1:n}.${5:propertyToRemove}",
+      "RETURN ${1:n}"
+    ],
+    "description": "Remove a property from node"
+  },
+  "Add Label": {
+    "prefix": "addlabel",
+    "body": [
+      "MATCH (${1:n}:${2:Label} {${3:prop}: ${4:value}})",
+      "SET ${1:n}:${5:NewLabel}",
+      "RETURN ${1:n}"
+    ],
+    "description": "Add a label to existing node"
+  },
+  "Remove Label": {
+    "prefix": "removelabel",
+    "body": [
+      "MATCH (${1:n}:${2:Label}:${3:LabelToRemove})",
+      "REMOVE ${1:n}:${3:LabelToRemove}",
+      "RETURN ${1:n}"
+    ],
+    "description": "Remove a label from node"
   }
 }
