@@ -249,11 +249,77 @@ function ensureGeodeLanguageMode(doc: vscode.TextDocument) {
 // Language Server
 // ============================================================================
 
-function startLanguageServer(context: vscode.ExtensionContext) {
-    const config = vscode.workspace.getConfiguration('geode.lsp');
-    const serverPath = resolveGeodeBinary(config);
-    const serverArgs = config.get<string[]>('args', ['lsp']);
+/**
+ * SECURITY: Check if a binary path is from a trusted source.
+ * Paths from user's machine settings or PATH are trusted.
+ * Paths from workspace folders require workspace trust.
+ */
+function isBinaryPathTrusted(binaryPath: string): boolean {
+    // If workspace is trusted, all paths are trusted
+    if (vscode.workspace.isTrusted) {
+        return true;
+    }
 
+    // Check if path is within workspace folders
+    const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
+    for (const folder of workspaceFolders) {
+        if (binaryPath.startsWith(folder.uri.fsPath)) {
+            // Path is within an untrusted workspace - not trusted
+            return false;
+        }
+    }
+
+    // Path is not in workspace (e.g., absolute system path or PATH lookup) - trusted
+    return true;
+}
+
+/**
+ * SECURITY: Validate that binary path doesn't contain suspicious patterns.
+ */
+function isValidBinaryPath(binaryPath: string): boolean {
+    // Reject obviously malicious patterns
+    const suspiciousPatterns = [
+        /[;&|`$]/, // Shell metacharacters
+        /\.\.[\/\\]/, // Path traversal
+        /^(sh|bash|zsh|cmd|powershell)/i, // Direct shell execution
+    ];
+
+    // Allow geode binaries with expected extensions
+    const basename = path.basename(binaryPath).toLowerCase();
+    const validNames = ['geode', 'geode.exe', 'geode.sh', 'geode.bat'];
+    if (validNames.includes(basename)) {
+        // Check for shell metacharacters even in valid names
+        for (const pattern of suspiciousPatterns.slice(0, 2)) {
+            if (pattern.test(binaryPath)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // Reject script extensions that aren't geode
+    if (/\.(sh|bat|cmd|ps1)$/i.test(binaryPath)) {
+        return false;
+    }
+
+    for (const pattern of suspiciousPatterns) {
+        if (pattern.test(binaryPath)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Core LSP server startup logic.
+ * SECURITY: Only call this after validating the binary path.
+ */
+function startLanguageServerWithPath(
+    context: vscode.ExtensionContext,
+    serverPath: string,
+    serverArgs: string[]
+): void {
     // Server options
     const serverOptions: ServerOptions = {
         command: serverPath,
@@ -288,7 +354,7 @@ function startLanguageServer(context: vscode.ExtensionContext) {
         },
         initializationFailedHandler: (error) => {
             outputChannel.appendLine(`LSP initialization failed: ${error}`);
-            return false;  // Don't try to restart
+            return false;
         },
         errorHandler: {
             error: (error, message, count) => {
@@ -332,6 +398,54 @@ function startLanguageServer(context: vscode.ExtensionContext) {
             }
         });
     });
+}
+
+async function startLanguageServer(context: vscode.ExtensionContext) {
+    const config = vscode.workspace.getConfiguration('geode.lsp');
+    const serverPath = resolveGeodeBinary(config);
+    const serverArgs = config.get<string[]>('args', ['lsp']);
+
+    // SECURITY: Validate binary path
+    if (!isValidBinaryPath(serverPath)) {
+        outputChannel.appendLine(`SECURITY: Rejected suspicious binary path: ${serverPath}`);
+        vscode.window.showErrorMessage(
+            `Geode: Rejected suspicious binary path "${serverPath}". Only legitimate geode binaries are allowed.`
+        );
+        return;
+    }
+
+    // SECURITY: Check workspace trust for workspace-relative binaries
+    if (!isBinaryPathTrusted(serverPath)) {
+        outputChannel.appendLine(`SECURITY: Binary path "${serverPath}" is from untrusted workspace`);
+        const choice = await vscode.window.showWarningMessage(
+            `Geode: The binary "${path.basename(serverPath)}" is from an untrusted workspace. ` +
+            `Running binaries from untrusted sources can be dangerous. ` +
+            `You can trust this workspace via File > Preferences > Manage Workspace Trust.`,
+            { modal: true },
+            'Use System Binary Instead',
+            'Cancel'
+        );
+
+        if (choice === 'Use System Binary Instead') {
+            // Fall back to PATH lookup
+            const pathBinary = findInPath('geode');
+            if (pathBinary) {
+                outputChannel.appendLine(`Falling back to system binary: ${pathBinary}`);
+                startLanguageServerWithPath(context, pathBinary, serverArgs);
+                return;
+            } else {
+                vscode.window.showErrorMessage('Geode binary not found in PATH. Install geode or trust this workspace.');
+                return;
+            }
+        } else {
+            // User cancelled or clicked Cancel
+            outputChannel.appendLine('User cancelled LSP start due to untrusted workspace');
+            return;
+        }
+    }
+
+    // Path is trusted, start the server
+    startLanguageServerWithPath(context, serverPath, serverArgs);
 }
 
 function resolveGeodeBinary(config: vscode.WorkspaceConfiguration): string {
@@ -919,17 +1033,22 @@ function runGeodeQueryWithProfile(
         const geodeCmd = resolveGeodeBinary(vscode.workspace.getConfiguration('geode.lsp'));
         const args = ['query', '--format', 'json'];
 
-        // Add connection arguments including password
-        args.push(...connectionManager.buildConnectionArgsWithPassword(profile, password));
+        // Add connection arguments (without password - password is passed via env var)
+        args.push(...connectionManager.buildConnectionArgsWithPassword(profile));
 
         // Use stdin for query to avoid issues with queries starting with '--' (comments)
         // The geode CLI accepts '-' to read query from stdin
         args.push('-');
 
-        outputChannel.appendLine(`Executing: ${geodeCmd} ${args.map(a => a.startsWith('-P') ? '-P ***' : a).join(' ')}`);
+        outputChannel.appendLine(`Executing: ${geodeCmd} ${args.join(' ')}`);
+
+        // SECURITY: Pass password via environment variable instead of CLI args
+        // to prevent exposure in process listings (ps aux)
+        const spawnEnv = connectionManager.buildPasswordEnvironment(password);
 
         const childProcess = cp.spawn(geodeCmd, args, {
-            timeout: profile.queryTimeout
+            timeout: profile.queryTimeout,
+            env: spawnEnv
         });
 
         let stdout = '';

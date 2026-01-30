@@ -5,6 +5,68 @@
 import * as vscode from 'vscode';
 import { GeodeClientWrapper, SchemaInfo } from '../client/GeodeClientWrapper';
 
+// Security constants for input validation
+const MAX_IDENTIFIER_LENGTH = 128;
+
+/**
+ * Sanitize GQL identifiers (labels, relationship types, property names).
+ * Throws an error if the value is invalid.
+ *
+ * SECURITY: Prevents GQL injection by validating against allowed character pattern.
+ */
+function sanitizeIdentifier(value: string, type: string): string {
+    if (!value || typeof value !== 'string') {
+        throw new Error(`${type} is required`);
+    }
+
+    const trimmed = value.trim();
+
+    if (trimmed.length === 0) {
+        throw new Error(`${type} cannot be empty`);
+    }
+
+    if (trimmed.length > MAX_IDENTIFIER_LENGTH) {
+        throw new Error(`${type} exceeds maximum length of ${MAX_IDENTIFIER_LENGTH}`);
+    }
+
+    // GQL identifiers: alphanumeric, underscores, must start with letter or underscore
+    const identifierPattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+    if (!identifierPattern.test(trimmed)) {
+        throw new Error(`${type} contains invalid characters. Only alphanumeric characters and underscores are allowed.`);
+    }
+
+    return trimmed;
+}
+
+/**
+ * Escape HTML special characters to prevent XSS.
+ *
+ * SECURITY: Escapes characters that have special meaning in HTML.
+ */
+function escapeHtml(text: string): string {
+    if (text === null || text === undefined) {
+        return '';
+    }
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;');
+}
+
+/**
+ * Generate a random nonce for CSP.
+ */
+function generateNonce(): string {
+    let text = '';
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    for (let i = 0; i < 32; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
+}
+
 export class EnhancedSchemaExplorerProvider implements vscode.TreeDataProvider<SchemaTreeItem> {
     private _onDidChangeTreeData = new vscode.EventEmitter<SchemaTreeItem | undefined | void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
@@ -227,9 +289,12 @@ export function registerSchemaExplorerCommands(
             }
 
             try {
+                // SECURITY: Sanitize label name to prevent GQL injection
+                const safeLabelName = sanitizeIdentifier(labelName, 'Label name');
+
                 // Query for label details
                 const result = await clientWrapper.query(`
-                    MATCH (n:${labelName})
+                    MATCH (n:${safeLabelName})
                     RETURN properties(n) as props
                     LIMIT 10
                 `);
@@ -263,9 +328,12 @@ export function registerSchemaExplorerCommands(
             }
 
             try {
+                // SECURITY: Sanitize relationship type to prevent GQL injection
+                const safeRelType = sanitizeIdentifier(relType, 'Relationship type');
+
                 // Query for relationship details
                 const result = await clientWrapper.query(`
-                    MATCH (a)-[r:${relType}]->(b)
+                    MATCH (a)-[r:${safeRelType}]->(b)
                     RETURN
                         labels(a) as source_labels,
                         labels(b) as target_labels,
@@ -300,21 +368,35 @@ export function registerSchemaExplorerCommands(
     context.subscriptions.push(
         vscode.commands.registerCommand('geode.schema.copyLabelQuery', async (item: SchemaTreeItem) => {
             if (item.data?.labelName) {
-                const query = `MATCH (n:${item.data.labelName}) RETURN n LIMIT 100`;
-                await vscode.env.clipboard.writeText(query);
-                vscode.window.showInformationMessage('Query copied to clipboard');
+                try {
+                    // SECURITY: Sanitize label name to prevent GQL injection
+                    const safeLabelName = sanitizeIdentifier(item.data.labelName, 'Label name');
+                    const query = `MATCH (n:${safeLabelName}) RETURN n LIMIT 100`;
+                    await vscode.env.clipboard.writeText(query);
+                    vscode.window.showInformationMessage('Query copied to clipboard');
+                } catch (error) {
+                    vscode.window.showErrorMessage(`Invalid label name: ${error}`);
+                }
             }
         })
     );
 }
 
 function generateLabelDetailsHtml(labelName: string, samples: any[]): string {
+    // SECURITY: Generate nonce for CSP
+    const nonce = generateNonce();
+
+    // SECURITY: Escape label name to prevent XSS
+    const safeLabelName = escapeHtml(labelName);
+
     return `
         <!DOCTYPE html>
         <html>
         <head>
-            <style>
-                body { font-family: var(--vscode-font-family); padding: 20px; }
+            <meta charset="UTF-8">
+            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'none';">
+            <style nonce="${nonce}">
+                body { font-family: var(--vscode-font-family); padding: 20px; background: var(--vscode-editor-background); color: var(--vscode-foreground); }
                 h1 { color: var(--vscode-foreground); }
                 .sample {
                     background: var(--vscode-editor-background);
@@ -332,12 +414,12 @@ function generateLabelDetailsHtml(labelName: string, samples: any[]): string {
             </style>
         </head>
         <body>
-            <h1>Label: ${labelName}</h1>
+            <h1>Label: ${safeLabelName}</h1>
             <h2>Sample Nodes</h2>
             ${samples.map((sample, i) => `
                 <div class="sample">
                     <h3>Sample ${i + 1}</h3>
-                    <pre>${JSON.stringify(sample, null, 2)}</pre>
+                    <pre>${escapeHtml(JSON.stringify(sample, null, 2))}</pre>
                 </div>
             `).join('')}
         </body>
@@ -346,12 +428,20 @@ function generateLabelDetailsHtml(labelName: string, samples: any[]): string {
 }
 
 function generateRelationshipDetailsHtml(relType: string, samples: any[]): string {
+    // SECURITY: Generate nonce for CSP
+    const nonce = generateNonce();
+
+    // SECURITY: Escape relationship type to prevent XSS
+    const safeRelType = escapeHtml(relType);
+
     return `
         <!DOCTYPE html>
         <html>
         <head>
-            <style>
-                body { font-family: var(--vscode-font-family); padding: 20px; }
+            <meta charset="UTF-8">
+            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'none';">
+            <style nonce="${nonce}">
+                body { font-family: var(--vscode-font-family); padding: 20px; background: var(--vscode-editor-background); color: var(--vscode-foreground); }
                 h1 { color: var(--vscode-foreground); }
                 .sample {
                     background: var(--vscode-editor-background);
@@ -375,16 +465,16 @@ function generateRelationshipDetailsHtml(relType: string, samples: any[]): strin
             </style>
         </head>
         <body>
-            <h1>Relationship: ${relType}</h1>
+            <h1>Relationship: ${safeRelType}</h1>
             <h2>Sample Relationships</h2>
             ${samples.map((sample, i) => `
                 <div class="sample">
                     <h3>Sample ${i + 1}</h3>
                     <div class="pattern">
-                        (${sample.source.join(',')}) -[:${relType}]-> (${sample.target.join(',')})
+                        (${escapeHtml(Array.isArray(sample.source) ? sample.source.join(',') : String(sample.source))}) -[:${safeRelType}]-&gt; (${escapeHtml(Array.isArray(sample.target) ? sample.target.join(',') : String(sample.target))})
                     </div>
                     <h4>Properties:</h4>
-                    <pre>${JSON.stringify(sample.properties, null, 2)}</pre>
+                    <pre>${escapeHtml(JSON.stringify(sample.properties, null, 2))}</pre>
                 </div>
             `).join('')}
         </body>

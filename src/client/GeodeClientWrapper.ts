@@ -135,11 +135,56 @@ export class GeodeClientWrapper {
     }
 
     /**
+     * SECURITY: Validate that binary path doesn't contain suspicious patterns.
+     * Defense in depth against malicious workspace attacks.
+     */
+    private isValidBinaryPath(binaryPath: string): boolean {
+        const suspiciousPatterns = [
+            /[;&|`$]/, // Shell metacharacters
+            /\.\.[\/\\]/, // Path traversal
+            /^(sh|bash|zsh|cmd|powershell)/i, // Direct shell execution
+        ];
+
+        const basename = path.basename(binaryPath).toLowerCase();
+        const validNames = ['geode', 'geode.exe', 'geode.sh', 'geode.bat'];
+        if (validNames.includes(basename)) {
+            // Still check for metacharacters and path traversal
+            for (const pattern of suspiciousPatterns.slice(0, 2)) {
+                if (pattern.test(binaryPath)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // Reject non-geode script extensions
+        if (/\.(sh|bat|cmd|ps1)$/i.test(binaryPath)) {
+            return false;
+        }
+
+        for (const pattern of suspiciousPatterns) {
+            if (pattern.test(binaryPath)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * Resolve the geode binary path
+     * SECURITY: Settings are restricted to machine scope in package.json.
+     * Additional validation is performed for defense in depth.
      */
     private resolveGeodeBinary(): string {
         const config = vscode.workspace.getConfiguration('geode.lsp');
         const configured = config.get<string>('path', 'geode');
+
+        // SECURITY: Validate the configured path
+        if (configured && !this.isValidBinaryPath(configured)) {
+            this.outputChannel.appendLine(`SECURITY: Rejected suspicious binary path: ${configured}`);
+            return 'geode'; // Fall back to PATH lookup
+        }
 
         // Check if configured path exists
         if (configured && fs.existsSync(configured)) {
@@ -424,17 +469,24 @@ export class GeodeClientWrapper {
 
             if (username && username.length > 0) {
                 args.push('-U', username);
-                // Only add password if username is set
-                if (password && password.length > 0) {
-                    args.push('-P', password);
-                }
+                // Password is passed via environment variable for security
+                // (not visible in process listings via ps aux)
             }
 
             // Use stdin for query
             args.push('-');
 
+            // Build environment with password if provided
+            // SECURITY: Pass password via environment variable instead of CLI arg
+            // to prevent exposure in process listings (ps aux, /proc/*/cmdline)
+            const spawnEnv: NodeJS.ProcessEnv = { ...process.env };
+            if (username && password && password.length > 0) {
+                spawnEnv['GEODE_PASSWORD'] = password;
+            }
+
             const proc = cp.spawn(this.geodeBinary, args, {
-                timeout: 30000
+                timeout: 30000,
+                env: spawnEnv
             });
 
             let stdout = '';

@@ -16,6 +16,78 @@
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
 
+/**
+ * GQL Input Sanitization Utilities
+ *
+ * These functions prevent GQL injection attacks by validating and sanitizing
+ * user input before interpolation into queries.
+ */
+
+/** Valid pattern for GQL identifiers (labels, relationship types, property names). */
+const GQL_IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/;
+
+/** Maximum length for identifiers */
+const MAX_IDENTIFIER_LENGTH = 128;
+
+/** Maximum length for string values */
+const MAX_STRING_VALUE_LENGTH = 10000;
+
+/**
+ * Validate and sanitize a GQL identifier (label, relationship type, property name).
+ * Returns null if invalid instead of throwing, for graceful handling in visualization.
+ */
+function sanitizeIdentifier(value: string | undefined | null): string | null {
+    if (!value || typeof value !== 'string') {
+        return null;
+    }
+
+    const trimmed = value.trim();
+
+    if (trimmed.length === 0 || trimmed.length > MAX_IDENTIFIER_LENGTH) {
+        return null;
+    }
+
+    if (!GQL_IDENTIFIER_PATTERN.test(trimmed)) {
+        return null;
+    }
+
+    return trimmed;
+}
+
+/**
+ * Escape a string value for safe interpolation in GQL queries.
+ */
+function escapeStringValue(value: string): string {
+    if (value === null || value === undefined) {
+        return '';
+    }
+
+    const strValue = String(value);
+
+    if (strValue.length > MAX_STRING_VALUE_LENGTH) {
+        return strValue.substring(0, MAX_STRING_VALUE_LENGTH).replace(/\\/g, '\\\\').replace(/'/g, "''");
+    }
+
+    return strValue.replace(/\\/g, '\\\\').replace(/'/g, "''");
+}
+
+/**
+ * Validate and sanitize a numeric value with bounds.
+ */
+function sanitizeNumber(value: any, defaultValue: number, min: number, max: number): number {
+    if (value === undefined || value === null || value === '') {
+        return defaultValue;
+    }
+
+    const num = parseInt(String(value), 10);
+
+    if (isNaN(num)) {
+        return defaultValue;
+    }
+
+    return Math.max(min, Math.min(max, num));
+}
+
 export interface GraphVisualizationOptions {
     extensionUri: vscode.Uri;
     viewColumn?: vscode.ViewColumn;
@@ -524,9 +596,9 @@ export class GraphVisualizationPanel {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}' https://unpkg.com; img-src data: https:;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}' https://unpkg.com; img-src data: https:;">
     <title>Graph Visualization</title>
-    <style>
+    <style nonce="${nonce}">
         * {
             margin: 0;
             padding: 0;
@@ -1014,11 +1086,12 @@ export class GraphVisualizationPanel {
     <div class="selection-info" id="selectionInfo"></div>
 
     <!-- Cytoscape.js - High-performance graph library -->
-    <script nonce="${nonce}" src="https://unpkg.com/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
+    <!-- SECURITY: Subresource Integrity (SRI) hashes prevent supply chain attacks -->
+    <script nonce="${nonce}" src="https://unpkg.com/cytoscape@3.28.1/dist/cytoscape.min.js" integrity="sha384-J7Q85oZE4GJ/e7+n2aOQsLXfDwwfnA8S2nZAL5BpFsfpCF84zQD7LroZ/dMnLgex" crossorigin="anonymous"></script>
     <!-- Layout extensions -->
-    <script nonce="${nonce}" src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
-    <script nonce="${nonce}" src="https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
-    <script nonce="${nonce}" src="https://unpkg.com/cytoscape-cose-bilkent@4.1.0/cytoscape-cose-bilkent.js"></script>
+    <script nonce="${nonce}" src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js" integrity="sha384-2IH3T69EIKYC4c+RXZifZRvaH5SRUdacJW7j6HtE5rQbvLhKKdawxq6vpIzJ7j9M" crossorigin="anonymous"></script>
+    <script nonce="${nonce}" src="https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js" integrity="sha384-u69h9ebXeSjlg6q/rb1zKTRAGu/h8deCl0409xpS/QJctMKnc4M9Fzkm01VOQdeF" crossorigin="anonymous"></script>
+    <script nonce="${nonce}" src="https://unpkg.com/cytoscape-cose-bilkent@4.1.0/cytoscape-cose-bilkent.js" integrity="sha384-CUkVnmwscI7lsYn26xHp4BmwwUaqCgfQlIkPoERUBcg8k0xFypHQjzlS8RuYuooO" crossorigin="anonymous"></script>
 
     <script nonce="${nonce}">
         // VS Code API
@@ -1383,9 +1456,11 @@ export class GraphVisualizationPanel {
             let html = '<div class="tooltip-title">';
             if (type === 'node') {
                 const labels = data.labels || [];
-                html += labels.length > 0 ? ':' + labels.join(':') : 'Node';
+                // Apply HTML escaping to prevent XSS from malicious label values
+                html += labels.length > 0 ? ':' + labels.map(l => escapeHtml(l)).join(':') : 'Node';
             } else {
-                html += data.type || data.label || 'Relationship';
+                // Apply HTML escaping to prevent XSS from malicious type/label values
+                html += escapeHtml(data.type || data.label || 'Relationship');
             }
             html += '</div>';
 
@@ -1397,7 +1472,8 @@ export class GraphVisualizationPanel {
                     const displayValue = typeof value === 'string' && value.length > 30
                         ? value.slice(0, 30) + '...'
                         : JSON.stringify(value);
-                    html += key + ': ' + displayValue + '<br>';
+                    // Apply HTML escaping to prevent XSS from malicious property names/values
+                    html += escapeHtml(key) + ': ' + escapeHtml(displayValue) + '<br>';
                 }
                 if (Object.keys(props).length > 5) {
                     html += '... and ' + (Object.keys(props).length - 5) + ' more';
@@ -1405,6 +1481,7 @@ export class GraphVisualizationPanel {
                 html += '</div>';
             }
 
+            // Note: All dynamic content is HTML-escaped above, so innerHTML is safe here
             tooltip.innerHTML = html;
             tooltip.style.display = 'block';
             tooltip.style.left = evt.renderedPosition.x + 10 + 'px';
@@ -1529,12 +1606,13 @@ export class GraphVisualizationPanel {
             }
             html += '</div>';
 
-            // Actions
+            // Actions - node IDs are escaped to prevent XSS in onclick handlers
+            const safeNodeId = escapeJsString(node.id());
             html += '<div class="action-buttons">';
-            html += '<button class="action-btn action-btn-primary" onclick="expandNode(cy.getElementById(\\'' + node.id() + '\\'), 1)">➕ Expand Neighbors</button>';
-            html += '<button class="action-btn" onclick="startPathMode(cy.getElementById(\\'' + node.id() + '\\'))">🔗 Find Paths From Here</button>';
-            html += '<button class="action-btn" onclick="focusOnNode(cy.getElementById(\\'' + node.id() + '\\'))">🎯 Focus View</button>';
-            html += '<button class="action-btn" onclick="queryRelated(\\'' + node.id() + '\\')">🔎 Query Related Data</button>';
+            html += '<button class="action-btn action-btn-primary" onclick="expandNode(cy.getElementById(\\'' + safeNodeId + '\\'), 1)">➕ Expand Neighbors</button>';
+            html += '<button class="action-btn" onclick="startPathMode(cy.getElementById(\\'' + safeNodeId + '\\'))">🔗 Find Paths From Here</button>';
+            html += '<button class="action-btn" onclick="focusOnNode(cy.getElementById(\\'' + safeNodeId + '\\'))">🎯 Focus View</button>';
+            html += '<button class="action-btn" onclick="queryRelated(\\'' + safeNodeId + '\\')">🔎 Query Related Data</button>';
             html += '</div>';
 
             content.innerHTML = html;
@@ -1577,10 +1655,12 @@ export class GraphVisualizationPanel {
             }
             html += '</div>';
 
-            // Actions
+            // Actions - IDs are escaped to prevent XSS in onclick handlers
+            const safeSourceId = escapeJsString(data.source);
+            const safeTargetId = escapeJsString(data.target);
             html += '<div class="action-buttons">';
-            html += '<button class="action-btn" onclick="cy.getElementById(\\'' + data.source + '\\').select()">Select Source</button>';
-            html += '<button class="action-btn" onclick="cy.getElementById(\\'' + data.target + '\\').select()">Select Target</button>';
+            html += '<button class="action-btn" onclick="cy.getElementById(\\'' + safeSourceId + '\\').select()">Select Source</button>';
+            html += '<button class="action-btn" onclick="cy.getElementById(\\'' + safeTargetId + '\\').select()">Select Target</button>';
             html += '</div>';
 
             content.innerHTML = html;
@@ -1650,6 +1730,16 @@ export class GraphVisualizationPanel {
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;');
+        }
+
+        // Escape for JavaScript string contexts (single-quoted strings)
+        // Used for onclick handler values to prevent XSS via node IDs
+        function escapeJsString(text) {
+            return String(text)
+                .replace(/\\\\/g, '\\\\\\\\')
+                .replace(/'/g, "\\\\'")
+                .replace(/\\n/g, '\\\\n')
+                .replace(/\\r/g, '\\\\r');
         }
 
         function updateSelectionInfo() {
@@ -2205,12 +2295,17 @@ export async function queryToDot(
         if (username) {
             args.push('-U', username);
         }
-        if (password) {
-            args.push('-P', password);
-        }
+        // SECURITY: Password is passed via environment variable below, not CLI args
         args.push('-');
 
-        const proc = cp.spawn(geodeBinary, args, { timeout: 60000 });
+        // SECURITY: Pass password via environment variable instead of CLI arg
+        // to prevent exposure in process listings (ps aux, /proc/*/cmdline)
+        const spawnEnv: NodeJS.ProcessEnv = { ...process.env };
+        if (password) {
+            spawnEnv['GEODE_PASSWORD'] = password;
+        }
+
+        const proc = cp.spawn(geodeBinary, args, { timeout: 60000, env: spawnEnv });
 
         let stdout = '';
         let stderr = '';
@@ -2257,12 +2352,17 @@ export async function queryToJson(
         if (username) {
             args.push('-U', username);
         }
-        if (password) {
-            args.push('-P', password);
-        }
+        // SECURITY: Password is passed via environment variable below, not CLI args
         args.push('-');
 
-        const proc = cp.spawn(geodeBinary, args, { timeout: 60000 });
+        // SECURITY: Pass password via environment variable instead of CLI arg
+        // to prevent exposure in process listings (ps aux, /proc/*/cmdline)
+        const spawnEnv: NodeJS.ProcessEnv = { ...process.env };
+        if (password) {
+            spawnEnv['GEODE_PASSWORD'] = password;
+        }
+
+        const proc = cp.spawn(geodeBinary, args, { timeout: 60000, env: spawnEnv });
 
         let stdout = '';
         let stderr = '';
@@ -2314,25 +2414,49 @@ export async function queryToJson(
 
 /**
  * Build a query to expand neighbors of a node
+ *
+ * Security: All inputs are sanitized to prevent GQL injection.
  */
 export function buildExpandQuery(nodeId: string, labels: string[], depth: number = 1): string {
-    // Build a match pattern based on labels
-    const labelPattern = labels.length > 0 ? ':' + labels.join(':') : '';
+    // Sanitize nodeId - escape for use in string comparison
+    const sanitizedNodeId = escapeStringValue(nodeId);
 
-    return `MATCH (n${labelPattern})-[r*1..${depth}]-(m)
-WHERE id(n) = '${nodeId}' OR n.id = '${nodeId}'
+    // Sanitize labels - only include valid identifiers
+    const validLabels = labels
+        .map(l => sanitizeIdentifier(l))
+        .filter((l): l is string => l !== null);
+    const labelPattern = validLabels.length > 0 ? ':' + validLabels.join(':') : '';
+
+    // Sanitize depth - ensure it's a safe integer
+    const sanitizedDepth = sanitizeNumber(depth, 1, 1, 10);
+
+    return `MATCH (n${labelPattern})-[r*1..${sanitizedDepth}]-(m)
+WHERE id(n) = '${sanitizedNodeId}' OR n.id = '${sanitizedNodeId}'
 RETURN n, r, m
 LIMIT 100`;
 }
 
 /**
  * Build a query to find related data for a node
+ *
+ * Security: All inputs are sanitized to prevent GQL injection.
  */
 export function buildRelatedQuery(nodeId: string, relationshipType?: string): string {
-    const relPattern = relationshipType ? `[:${relationshipType}]` : '[r]';
+    // Sanitize nodeId
+    const sanitizedNodeId = escapeStringValue(nodeId);
+
+    // Sanitize relationshipType if provided
+    let relPattern = '[r]';
+    if (relationshipType) {
+        const sanitizedType = sanitizeIdentifier(relationshipType);
+        if (sanitizedType) {
+            relPattern = `[:${sanitizedType}]`;
+        }
+        // If invalid, fall back to matching any relationship type
+    }
 
     return `MATCH (n)-${relPattern}-(m)
-WHERE id(n) = '${nodeId}' OR n.id = '${nodeId}'
+WHERE id(n) = '${sanitizedNodeId}' OR n.id = '${sanitizedNodeId}'
 RETURN n, r, m
 LIMIT 50`;
 }

@@ -11,11 +11,31 @@ useDefault = true
 description = "Global allowlist"
 paths = [
   '''testdata''',
-  '''tests/.*''',
+  '''tests/fixtures/.*''',
   '''node_modules''',
   '''out''',
-  '''.*\.ts$''',
-  '''.*\.js$''',
-  '''.*\.md$''',
+  '''dist''',
   '''.*\.log$''',
+  '''package-lock\.json$''',
 ]
+
+# Specific allowlist for known false positives
+[[rules]]
+id = "vscode-api-patterns"
+description = "Allow VS Code API references that look like credentials"
+regex = '''vscode\.(SecretStorage|secrets)'''
+allowlist = { regexTarget = "match" }
+
+[[rules]]
+id = "example-connection-strings"
+description = "Allow example connection strings in documentation"
+path = '''README\.md'''
+regex = '''geode://[a-zA-Z]+:[a-zA-Z]+@localhost'''
+allowlist = { regexTarget = "match" }
+
+[[rules]]
+id = "test-credentials"
+description = "Allow test credentials in test files"
+path = '''src/test/.*\.ts$'''
+regex = '''(password|secret).*['"]test|mock|example'''
+allowlist = { regexTarget = "match" }

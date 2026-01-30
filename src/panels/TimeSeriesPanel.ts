@@ -69,9 +69,9 @@ export class TimeSeriesPanel {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
     <title>Analytics Dashboard</title>
-    <style>
+    <style nonce="${nonce}">
         body { font-family: var(--vscode-font-family); padding: 20px; background: var(--vscode-editor-background); color: var(--vscode-foreground); }
         .chart-container { border: 1px solid var(--vscode-panel-border); border-radius: 8px; padding: 20px; }
         .chart-header { display: flex; justify-content: space-between; margin-bottom: 16px; }

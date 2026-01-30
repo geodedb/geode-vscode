@@ -9,6 +9,109 @@ import * as vscode from 'vscode';
 import { GeodeClientWrapper } from '../client/GeodeClientWrapper';
 
 /**
+ * GQL Input Sanitization Utilities
+ *
+ * These functions prevent GQL injection attacks by validating and sanitizing
+ * user input before interpolation into queries.
+ */
+
+/**
+ * Valid pattern for GQL identifiers (labels, relationship types, property names).
+ * Must start with a letter and contain only alphanumeric characters and underscores.
+ */
+const GQL_IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/;
+
+/**
+ * Maximum length for identifiers to prevent DoS via excessively long inputs
+ */
+const MAX_IDENTIFIER_LENGTH = 128;
+
+/**
+ * Maximum length for string values
+ */
+const MAX_STRING_VALUE_LENGTH = 10000;
+
+/**
+ * Validate and sanitize a GQL identifier (label, relationship type, property name).
+ * Throws an error if the identifier is invalid.
+ *
+ * @param value - The identifier to validate
+ * @param type - Description of the identifier type for error messages
+ * @returns The validated identifier
+ * @throws Error if the identifier is invalid
+ */
+function sanitizeIdentifier(value: string, type: string): string {
+    if (!value || typeof value !== 'string') {
+        throw new Error(`${type} is required`);
+    }
+
+    const trimmed = value.trim();
+
+    if (trimmed.length === 0) {
+        throw new Error(`${type} cannot be empty`);
+    }
+
+    if (trimmed.length > MAX_IDENTIFIER_LENGTH) {
+        throw new Error(`${type} exceeds maximum length of ${MAX_IDENTIFIER_LENGTH} characters`);
+    }
+
+    if (!GQL_IDENTIFIER_PATTERN.test(trimmed)) {
+        throw new Error(
+            `Invalid ${type}: "${trimmed}". Must start with a letter and contain only ` +
+            `alphanumeric characters and underscores.`
+        );
+    }
+
+    return trimmed;
+}
+
+/**
+ * Escape a string value for safe interpolation in GQL queries.
+ * Escapes single quotes by doubling them.
+ *
+ * @param value - The string value to escape
+ * @returns The escaped string (without surrounding quotes)
+ */
+function escapeStringValue(value: string): string {
+    if (value === null || value === undefined) {
+        return '';
+    }
+
+    const strValue = String(value);
+
+    if (strValue.length > MAX_STRING_VALUE_LENGTH) {
+        throw new Error(`String value exceeds maximum length of ${MAX_STRING_VALUE_LENGTH} characters`);
+    }
+
+    // Escape single quotes by doubling them, and escape backslashes
+    return strValue.replace(/\\/g, '\\\\').replace(/'/g, "''");
+}
+
+/**
+ * Validate and sanitize a numeric value.
+ * Returns a safe integer within specified bounds.
+ *
+ * @param value - The value to validate
+ * @param defaultValue - Default value if input is undefined
+ * @param min - Minimum allowed value
+ * @param max - Maximum allowed value
+ * @returns A safe integer value
+ */
+function sanitizeNumber(value: any, defaultValue: number, min: number, max: number): number {
+    if (value === undefined || value === null || value === '') {
+        return defaultValue;
+    }
+
+    const num = parseInt(String(value), 10);
+
+    if (isNaN(num)) {
+        return defaultValue;
+    }
+
+    return Math.max(min, Math.min(max, num));
+}
+
+/**
  * MCP Tool definition
  */
 export interface MCPTool {
@@ -419,9 +522,15 @@ export class GeodeMCPServer {
             };
         }
 
-        const query = label
-            ? `MATCH (n:${label}) RETURN count(n) as count`
-            : 'MATCH (n) RETURN count(n) as count';
+        let query: string;
+        let sanitizedLabel: string | undefined;
+
+        if (label) {
+            sanitizedLabel = sanitizeIdentifier(label, 'Node label');
+            query = `MATCH (n:${sanitizedLabel}) RETURN count(n) as count`;
+        } else {
+            query = 'MATCH (n) RETURN count(n) as count';
+        }
 
         const result = await this.client.query(query);
         const rows = await result.toObjects();
@@ -430,7 +539,7 @@ export class GeodeMCPServer {
         return {
             content: [{
                 type: 'text',
-                text: `Node count${label ? ` for label "${label}"` : ''}: ${count}`
+                text: `Node count${sanitizedLabel ? ` for label "${sanitizedLabel}"` : ''}: ${count}`
             }]
         };
     }
@@ -443,9 +552,15 @@ export class GeodeMCPServer {
             };
         }
 
-        const query = type
-            ? `MATCH ()-[r:${type}]->() RETURN count(r) as count`
-            : 'MATCH ()-[r]->() RETURN count(r) as count';
+        let query: string;
+        let sanitizedType: string | undefined;
+
+        if (type) {
+            sanitizedType = sanitizeIdentifier(type, 'Relationship type');
+            query = `MATCH ()-[r:${sanitizedType}]->() RETURN count(r) as count`;
+        } else {
+            query = 'MATCH ()-[r]->() RETURN count(r) as count';
+        }
 
         const result = await this.client.query(query);
         const rows = await result.toObjects();
@@ -454,7 +569,7 @@ export class GeodeMCPServer {
         return {
             content: [{
                 type: 'text',
-                text: `Relationship count${type ? ` for type "${type}"` : ''}: ${count}`
+                text: `Relationship count${sanitizedType ? ` for type "${sanitizedType}"` : ''}: ${count}`
             }]
         };
     }
@@ -467,10 +582,18 @@ export class GeodeMCPServer {
             };
         }
 
-        const maxDepth = parseInt(args.maxDepth || '5', 10);
+        // Validate and sanitize all inputs
+        const startLabel = sanitizeIdentifier(args.startLabel, 'Start node label');
+        const startProperty = sanitizeIdentifier(args.startProperty, 'Start node property');
+        const startValue = escapeStringValue(args.startValue);
+        const endLabel = sanitizeIdentifier(args.endLabel, 'End node label');
+        const endProperty = sanitizeIdentifier(args.endProperty, 'End node property');
+        const endValue = escapeStringValue(args.endValue);
+        const maxDepth = sanitizeNumber(args.maxDepth, 5, 1, 20);
+
         const query = `
-            MATCH (start:${args.startLabel} {${args.startProperty}: '${args.startValue}'})
-            MATCH (end:${args.endLabel} {${args.endProperty}: '${args.endValue}'})
+            MATCH (start:${startLabel} {${startProperty}: '${startValue}'})
+            MATCH (end:${endLabel} {${endProperty}: '${endValue}'})
             MATCH path = shortestPath((start)-[*1..${maxDepth}]-(end))
             RETURN path
             LIMIT 5
@@ -514,6 +637,9 @@ export class GeodeMCPServer {
             };
         }
 
+        // Validate and sanitize label
+        const sanitizedLabel = sanitizeIdentifier(label, 'Node label');
+
         let properties: Record<string, any>;
         try {
             properties = JSON.parse(propertiesJson);
@@ -524,11 +650,24 @@ export class GeodeMCPServer {
             };
         }
 
+        // Validate and sanitize property names and escape values
         const propEntries = Object.entries(properties)
-            .map(([k, v]) => `${k}: ${typeof v === 'string' ? `'${v}'` : v}`)
+            .map(([k, v]) => {
+                const sanitizedKey = sanitizeIdentifier(k, 'Property name');
+                if (typeof v === 'string') {
+                    return `${sanitizedKey}: '${escapeStringValue(v)}'`;
+                } else if (typeof v === 'number' || typeof v === 'boolean') {
+                    return `${sanitizedKey}: ${v}`;
+                } else if (v === null) {
+                    return `${sanitizedKey}: null`;
+                } else {
+                    // For complex types, serialize to JSON string
+                    return `${sanitizedKey}: '${escapeStringValue(JSON.stringify(v))}'`;
+                }
+            })
             .join(', ');
 
-        const query = `CREATE (n:${label} {${propEntries}}) RETURN n`;
+        const query = `CREATE (n:${sanitizedLabel} {${propEntries}}) RETURN n`;
         const result = await this.client.query(query);
         const rows = await result.toObjects();
 
@@ -548,12 +687,32 @@ export class GeodeMCPServer {
             };
         }
 
+        // Validate and sanitize all identifiers
+        const fromLabel = sanitizeIdentifier(args.fromLabel, 'Source node label');
+        const fromProperty = sanitizeIdentifier(args.fromProperty, 'Source node property');
+        const fromValue = escapeStringValue(args.fromValue);
+        const toLabel = sanitizeIdentifier(args.toLabel, 'Target node label');
+        const toProperty = sanitizeIdentifier(args.toProperty, 'Target node property');
+        const toValue = escapeStringValue(args.toValue);
+        const relationshipType = sanitizeIdentifier(args.relationshipType, 'Relationship type');
+
         let relProps = '';
         if (args.properties) {
             try {
                 const props = JSON.parse(args.properties);
                 const propEntries = Object.entries(props)
-                    .map(([k, v]) => `${k}: ${typeof v === 'string' ? `'${v}'` : v}`)
+                    .map(([k, v]) => {
+                        const sanitizedKey = sanitizeIdentifier(k, 'Property name');
+                        if (typeof v === 'string') {
+                            return `${sanitizedKey}: '${escapeStringValue(v)}'`;
+                        } else if (typeof v === 'number' || typeof v === 'boolean') {
+                            return `${sanitizedKey}: ${v}`;
+                        } else if (v === null) {
+                            return `${sanitizedKey}: null`;
+                        } else {
+                            return `${sanitizedKey}: '${escapeStringValue(JSON.stringify(v))}'`;
+                        }
+                    })
                     .join(', ');
                 relProps = ` {${propEntries}}`;
             } catch {
@@ -565,9 +724,9 @@ export class GeodeMCPServer {
         }
 
         const query = `
-            MATCH (a:${args.fromLabel} {${args.fromProperty}: '${args.fromValue}'})
-            MATCH (b:${args.toLabel} {${args.toProperty}: '${args.toValue}'})
-            CREATE (a)-[r:${args.relationshipType}${relProps}]->(b)
+            MATCH (a:${fromLabel} {${fromProperty}: '${fromValue}'})
+            MATCH (b:${toLabel} {${toProperty}: '${toValue}'})
+            CREATE (a)-[r:${relationshipType}${relProps}]->(b)
             RETURN a, r, b
         `;
 

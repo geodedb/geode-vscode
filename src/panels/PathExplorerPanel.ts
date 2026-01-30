@@ -2,6 +2,68 @@
 import * as vscode from 'vscode';
 import { BaseWebviewPanel, getWebviewOptions, WebviewPanelOptions } from './BaseWebviewPanel';
 
+// Security constants for input validation
+const MAX_IDENTIFIER_LENGTH = 128;
+const MAX_STRING_VALUE_LENGTH = 10000;
+const MAX_DEPTH = 20;
+
+/**
+ * Sanitize GQL identifiers (labels, relationship types, property names).
+ * Returns null if the value is invalid.
+ *
+ * SECURITY: Prevents GQL injection by validating against allowed character pattern.
+ */
+function sanitizeIdentifier(value: string | undefined | null): string | null {
+    if (!value || typeof value !== 'string') {
+        return null;
+    }
+
+    const trimmed = value.trim();
+
+    if (trimmed.length === 0 || trimmed.length > MAX_IDENTIFIER_LENGTH) {
+        return null;
+    }
+
+    // GQL identifiers: alphanumeric, underscores, must start with letter or underscore
+    const identifierPattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+    if (!identifierPattern.test(trimmed)) {
+        return null;
+    }
+
+    return trimmed;
+}
+
+/**
+ * Escape string values for safe interpolation in GQL queries.
+ *
+ * SECURITY: Escapes single quotes and backslashes to prevent injection.
+ */
+function escapeStringValue(value: string): string {
+    if (value === null || value === undefined) {
+        return '';
+    }
+
+    const strValue = String(value);
+
+    if (strValue.length > MAX_STRING_VALUE_LENGTH) {
+        return strValue.substring(0, MAX_STRING_VALUE_LENGTH).replace(/\\/g, '\\\\').replace(/'/g, "''");
+    }
+
+    return strValue.replace(/\\/g, '\\\\').replace(/'/g, "''");
+}
+
+/**
+ * Sanitize numeric depth value with bounds checking.
+ *
+ * SECURITY: Prevents injection via depth parameter and limits resource usage.
+ */
+function sanitizeDepth(value: number): number {
+    if (typeof value !== 'number' || isNaN(value)) {
+        return 5; // Safe default
+    }
+    return Math.max(1, Math.min(Math.floor(value), MAX_DEPTH));
+}
+
 /**
  * Path and Relationship Explorer Panel
  * Visualizes paths between nodes and relationship patterns in the graph.
@@ -323,24 +385,36 @@ export class PathExplorerPanel extends BaseWebviewPanel {
         const params = this._searchParams;
         let query = '';
 
-        const relPattern = params.relationshipTypes.length > 0
-            ? `:${params.relationshipTypes.join('|')}`
+        // SECURITY: Sanitize relationship types to prevent GQL injection
+        const sanitizedRelTypes = params.relationshipTypes
+            .map(rt => sanitizeIdentifier(rt))
+            .filter((rt): rt is string => rt !== null);
+
+        const relPattern = sanitizedRelTypes.length > 0
+            ? `:${sanitizedRelTypes.join('|')}`
             : '';
+
+        // SECURITY: Escape source and target node values to prevent GQL injection
+        const escapedSource = escapeStringValue(params.sourceNode);
+        const escapedTarget = escapeStringValue(params.targetNode);
+
+        // SECURITY: Sanitize depth parameter with bounds checking
+        const safeDepth = sanitizeDepth(params.maxDepth);
 
         switch (params.pathType) {
             case 'shortest':
-                query = `MATCH p = shortestPath((a)-[${relPattern}*1..${params.maxDepth}]->(b))
-WHERE a.id = '${params.sourceNode}' AND b.id = '${params.targetNode}'
+                query = `MATCH p = shortestPath((a)-[${relPattern}*1..${safeDepth}]->(b))
+WHERE a.id = '${escapedSource}' AND b.id = '${escapedTarget}'
 RETURN p`;
                 break;
             case 'all':
-                query = `MATCH p = (a)-[${relPattern}*1..${params.maxDepth}]->(b)
-WHERE a.id = '${params.sourceNode}' AND b.id = '${params.targetNode}'
+                query = `MATCH p = (a)-[${relPattern}*1..${safeDepth}]->(b)
+WHERE a.id = '${escapedSource}' AND b.id = '${escapedTarget}'
 RETURN p`;
                 break;
             case 'weighted':
-                query = `MATCH p = (a)-[${relPattern}*1..${params.maxDepth}]->(b)
-WHERE a.id = '${params.sourceNode}' AND b.id = '${params.targetNode}'
+                query = `MATCH p = (a)-[${relPattern}*1..${safeDepth}]->(b)
+WHERE a.id = '${escapedSource}' AND b.id = '${escapedTarget}'
 WITH p, reduce(cost = 0, r IN relationships(p) | cost + coalesce(r.weight, 1)) AS totalCost
 RETURN p, totalCost
 ORDER BY totalCost

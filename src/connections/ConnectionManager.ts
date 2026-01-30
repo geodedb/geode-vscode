@@ -37,6 +37,8 @@ export interface ConnectionProfile {
 
 /**
  * Default connection profile for localhost development
+ * Note: insecure mode is disabled by default for security.
+ * Users must explicitly enable it if needed for self-signed certificates.
  */
 export function createDefaultProfile(): ConnectionProfile {
     return {
@@ -45,11 +47,44 @@ export function createDefaultProfile(): ConnectionProfile {
         host: 'localhost',
         port: 3141,
         useTls: true,
-        insecure: true, // Skip cert verification for local dev
+        insecure: false, // Secure by default - require valid TLS certificates
         timeout: 5000,
         queryTimeout: 30000,
         isDefault: true
     };
+}
+
+/**
+ * Check if a connection profile has insecure mode enabled and show warning.
+ * Returns true if the user acknowledges the warning or host is localhost.
+ */
+export async function warnIfInsecure(profile: ConnectionProfile): Promise<boolean> {
+    if (!profile.insecure) {
+        return true; // Secure connection, no warning needed
+    }
+
+    const isLocalhost = profile.host === 'localhost' ||
+                        profile.host === '127.0.0.1' ||
+                        profile.host === '::1';
+
+    if (isLocalhost) {
+        // Show informational message for localhost but don't block
+        vscode.window.showInformationMessage(
+            `Connecting to ${profile.name} with TLS certificate verification disabled (localhost).`
+        );
+        return true;
+    }
+
+    // For non-localhost, show a stronger warning and require confirmation
+    const result = await vscode.window.showWarningMessage(
+        `Warning: TLS certificate verification is disabled for ${profile.name} (${profile.host}). ` +
+        `This makes the connection vulnerable to man-in-the-middle attacks.`,
+        { modal: true },
+        'Connect Anyway',
+        'Cancel'
+    );
+
+    return result === 'Connect Anyway';
 }
 
 /**
@@ -225,11 +260,14 @@ export class ConnectionManager {
      * Build the connection arguments for the geode CLI
      *
      * Supported CLI flags:
-     *   --server <addr:port>   Server address
-     *   --insecure             Skip TLS certificate verification
-     *   --timeout <secs>       Connection timeout in seconds
-     *   -U, --user <username>  Authenticate as user
-     *   -P, --password <pass>  Authentication password
+     *   --server addr:port   Server address
+     *   --insecure           Skip TLS certificate verification
+     *   --timeout secs       Connection timeout in seconds
+     *   -U, --user username  Authenticate as user
+     *
+     * SECURITY NOTE: Password should be passed via GEODE_PASSWORD environment
+     * variable (using buildPasswordEnvironment), NOT via command-line arguments,
+     * to prevent exposure in process listings.
      */
     buildConnectionArgs(profile: ConnectionProfile): string[] {
         const args: string[] = [];
@@ -253,17 +291,33 @@ export class ConnectionManager {
     }
 
     /**
-     * Build connection arguments including password
-     * Password is passed via -P flag
+     * Build environment variables for CLI invocation including password
+     *
+     * SECURITY: Password is passed via GEODE_PASSWORD environment variable
+     * instead of CLI args to prevent exposure in process listings.
+     *
+     * @param password Optional password to include
+     * @returns Environment variables object to pass to spawn/exec
      */
-    buildConnectionArgsWithPassword(profile: ConnectionProfile, password?: string): string[] {
-        const args = this.buildConnectionArgs(profile);
-
+    buildPasswordEnvironment(password?: string): Record<string, string | undefined> {
+        const env: Record<string, string | undefined> = { ...process.env };
         if (password) {
-            args.push('-P', password);
+            env['GEODE_PASSWORD'] = password;
         }
+        return env;
+    }
 
-        return args;
+    /**
+     * Build connection arguments including password
+     *
+     * @deprecated Use buildConnectionArgs() + buildPasswordEnvironment() instead.
+     * Passing password via CLI args exposes it in process listings.
+     * This method now returns args without password for security.
+     */
+    buildConnectionArgsWithPassword(profile: ConnectionProfile, _password?: string): string[] {
+        // SECURITY: No longer include password in CLI args
+        // Password should be passed via GEODE_PASSWORD environment variable
+        return this.buildConnectionArgs(profile);
     }
 
     /**

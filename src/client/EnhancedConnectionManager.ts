@@ -4,6 +4,33 @@
 
 import * as vscode from 'vscode';
 import { GeodeClientWrapper, ConnectionStatus, GeodeConfig } from './GeodeClientWrapper';
+import { warnIfInsecure } from '../connections/ConnectionManager';
+
+/**
+ * Safely merge object properties while preventing prototype pollution.
+ *
+ * SECURITY: Filters out dangerous keys (__proto__, constructor, prototype)
+ * that could pollute Object.prototype if malicious data is merged.
+ */
+function safeMerge<T extends object>(target: T, source: Partial<T>): T {
+    const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
+
+    if (!source || typeof source !== 'object') {
+        return target;
+    }
+
+    for (const key of Object.keys(source)) {
+        if (!dangerousKeys.includes(key) && Object.prototype.hasOwnProperty.call(source, key)) {
+            const value = (source as any)[key];
+            // Only assign primitive values and safe objects
+            if (value !== undefined) {
+                (target as any)[key] = value;
+            }
+        }
+    }
+
+    return target;
+}
 
 export interface ConnectionProfile {
     id: string;
@@ -106,7 +133,8 @@ export class EnhancedConnectionManager {
             delete updates.password;
         }
 
-        Object.assign(profile, updates);
+        // SECURITY: Use safeMerge instead of Object.assign to prevent prototype pollution
+        safeMerge(profile, updates);
         await this.saveProfiles();
         this._onDidChangeProfiles.fire();
 
@@ -145,6 +173,13 @@ export class EnhancedConnectionManager {
         const profile = this.profiles.get(profileId);
         if (!profile) {
             throw new Error(`Profile ${profileId} not found`);
+        }
+
+        // Warn user if insecure mode is enabled and get confirmation for non-localhost
+        const shouldProceed = await warnIfInsecure(profile);
+        if (!shouldProceed) {
+            this.outputChannel.appendLine(`Connection to ${profile.name} cancelled by user (insecure mode warning)`);
+            return;
         }
 
         // Disconnect if already connected
@@ -418,16 +453,33 @@ export class EnhancedConnectionManager {
     }
 
     /**
-     * Build connection args with password (compatibility stub)
+     * Build connection args (compatibility method)
+     *
+     * @deprecated Use buildConnectionArgs() + buildPasswordEnvironment() instead.
+     * Password is no longer passed via CLI args for security.
      */
-    buildConnectionArgsWithPassword(profile: ConnectionProfile, password?: string): string[] {
-        // This is a compatibility method - the new implementation uses DSN
+    buildConnectionArgsWithPassword(profile: ConnectionProfile, _password?: string): string[] {
+        // SECURITY: Password should be passed via GEODE_PASSWORD environment variable
+        // See buildPasswordEnvironment() for secure password handling
         return [
             '--server', `${profile.host}:${profile.port}`,
-            ...(password ? ['--password', password] : []),
             ...(profile.username ? ['--username', profile.username] : []),
             ...(profile.insecure ? ['--insecure'] : [])
         ];
+    }
+
+    /**
+     * Build environment variables for CLI invocation including password
+     *
+     * SECURITY: Password is passed via GEODE_PASSWORD environment variable
+     * instead of CLI args to prevent exposure in process listings.
+     */
+    buildPasswordEnvironment(password?: string): Record<string, string | undefined> {
+        const env: Record<string, string | undefined> = { ...process.env };
+        if (password) {
+            env['GEODE_PASSWORD'] = password;
+        }
+        return env;
     }
 
     /**

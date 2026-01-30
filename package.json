@@ -623,14 +623,16 @@
         "geode.lsp.path": {
           "type": "string",
           "default": "geode",
-          "description": "Path to the geode executable"
+          "scope": "machine",
+          "description": "Path to the geode executable. SECURITY: This setting is restricted to machine scope to prevent malicious workspace attacks."
         },
         "geode.lsp.args": {
           "type": "array",
           "default": [
             "lsp"
           ],
-          "description": "Arguments to pass to the LSP server"
+          "scope": "machine",
+          "description": "Arguments to pass to the LSP server. SECURITY: This setting is restricted to machine scope to prevent malicious workspace attacks."
         },
         "geode.lsp.trace.server": {
           "type": "string",
