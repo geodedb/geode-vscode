@@ -181,7 +181,8 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('geode.showPerformanceMetrics', () => {
             PerformanceMetricsPanel.createOrShow({
                 extensionUri: context.extensionUri,
-                viewColumn: vscode.ViewColumn.Two
+                viewColumn: vscode.ViewColumn.Two,
+                geodeClient: connectionManager.getClient()
             });
         }),
         vscode.commands.registerCommand('geode.showGraphVisualization', showGraphVisualization),
@@ -1296,7 +1297,7 @@ function getDocumentationHtml(): string {
 
     <h2>Links</h2>
     <ul>
-        <li><a href="https://github.com/geode-db/geode">Geode GitHub Repository</a></li>
+        <li><a href="https://gitlab.com/devnw/codepros/geode/geode">Geode Repository</a></li>
         <li><a href="https://www.iso.org/standard/76120.html">ISO/IEC 39075 GQL Standard</a></li>
     </ul>
 </body>

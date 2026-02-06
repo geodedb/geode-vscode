@@ -273,8 +273,9 @@ describe('Connection Manager Tests', () => {
     });
 
     describe('DSN Building', () => {
+        // Geode always uses TLS (QUIC+TLS 1.3), so DSN always uses geode:// prefix
         function buildDsn(profile: ConnectionProfile, password?: string): string {
-            let dsn = profile.useTls ? 'geodes://' : 'geode://';
+            let dsn = 'geode://';
 
             if (profile.username) {
                 dsn += encodeURIComponent(profile.username);
@@ -312,7 +313,7 @@ describe('Connection Manager Tests', () => {
             const profile = createDefaultProfile();
             const dsn = buildDsn(profile);
 
-            assert.ok(dsn.startsWith('geodes://'));
+            assert.ok(dsn.startsWith('geode://'));
             assert.ok(dsn.includes('localhost'));
             assert.ok(dsn.includes('insecure=true'));
         });
@@ -368,7 +369,7 @@ describe('Connection Manager Tests', () => {
             assert.ok(dsn.includes('/mydb'));
         });
 
-        it('uses geode:// for non-TLS connections', () => {
+        it('always uses geode:// prefix (Geode requires TLS via QUIC)', () => {
             const profile: ConnectionProfile = {
                 ...createDefaultProfile(),
                 useTls: false,
@@ -376,8 +377,8 @@ describe('Connection Manager Tests', () => {
             };
             const dsn = buildDsn(profile);
 
+            // Geode always uses QUIC+TLS 1.3, so prefix is always geode://
             assert.ok(dsn.startsWith('geode://'));
-            assert.ok(!dsn.startsWith('geodes://'));
         });
     });
 

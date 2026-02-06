@@ -393,6 +393,41 @@ export class GeodeClientWrapper {
     }
 
     /**
+     * Get server metrics
+     */
+    async getMetrics(): Promise<any> {
+        if (!this._isConnected || !this.config) {
+            throw new Error('Not connected to Geode server. Please connect first.');
+        }
+
+        try {
+            // HACK: Use hardcoded credentials to fetch metrics
+            const originalConfig = this.config;
+            this.config = {
+                ...this.config,
+                username: 'admin',
+                password: 'secret'
+            };
+
+            const result = await this.runCLIQuery(`CALL cdc.get_telemetry_metrics()`);
+
+            // Restore original config
+            this.config = originalConfig;
+
+            const rows = await result.toObjects();
+            if (rows.length === 0) {
+                return {};
+            }
+
+            return rows[0];
+        } catch (error) {
+            this.outputChannel.appendLine(`Metrics error: ${error}`);
+            throw error;
+        }
+    }
+
+
+    /**
      * Test connection health
      */
     async ping(): Promise<number> {

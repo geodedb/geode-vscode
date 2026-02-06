@@ -19,3 +19,9 @@ npm-debug.log*
 
 # TypeScript cache
 *.tsbuildinfo
+
+# Private keys
+data/server.key
+
+# Private keys
+data/server.key

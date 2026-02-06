@@ -215,11 +215,17 @@ export abstract class BaseWebviewPanel {
 /**
  * Options for creating a webview panel.
  */
+import { GeodeClientWrapper } from '../client/GeodeClientWrapper';
+
+// ... other code
+
 export interface WebviewPanelOptions {
     extensionUri: vscode.Uri;
     viewColumn?: vscode.ViewColumn;
     preserveFocus?: boolean;
+    geodeClient?: GeodeClientWrapper;
 }
+
 
 /**
  * Helper function to create common webview options.

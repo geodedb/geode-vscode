@@ -1,6 +1,7 @@
 // CANARY: REQ=REQ-VSCODE-METRICS-001; FEATURE="PerformanceMetricsPanel"; ASPECT=Implementation; STATUS=IMPL; OWNER=vscode; UPDATED=2026-01-03
 import * as vscode from 'vscode';
 import { BaseWebviewPanel, getWebviewOptions, WebviewPanelOptions } from './BaseWebviewPanel';
+import { GeodeClientWrapper } from '../client/GeodeClientWrapper';
 
 /**
  * Real-time Performance Metrics Dashboard
@@ -13,9 +14,12 @@ export class PerformanceMetricsPanel extends BaseWebviewPanel {
     private _metrics: PerformanceMetrics = this._getDefaultMetrics();
     private _refreshInterval: NodeJS.Timeout | undefined;
     private _isConnected: boolean = false;
+    private geodeClient: GeodeClientWrapper;
 
-    private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
+    private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, geodeClient: GeodeClientWrapper) {
         super(panel, extensionUri);
+        this.geodeClient = geodeClient;
+        this._fetchMetrics();
     }
 
     public static createOrShow(options: WebviewPanelOptions): PerformanceMetricsPanel {
@@ -33,9 +37,14 @@ export class PerformanceMetricsPanel extends BaseWebviewPanel {
             getWebviewOptions(options.extensionUri)
         );
 
-        PerformanceMetricsPanel._instance = new PerformanceMetricsPanel(panel, options.extensionUri);
+        if (!options.geodeClient) {
+            throw new Error('geodeClient is required');
+        }
+
+        PerformanceMetricsPanel._instance = new PerformanceMetricsPanel(panel, options.extensionUri, options.geodeClient);
         return PerformanceMetricsPanel._instance;
     }
+
 
     protected get title(): string {
         return 'Geode Performance Metrics';
@@ -65,6 +74,60 @@ export class PerformanceMetricsPanel extends BaseWebviewPanel {
     protected getScripts(): vscode.Uri[] {
         return [this.getWebviewUri('src', 'webviews', 'metrics', 'metrics.js')];
     }
+
+    private async _fetchMetrics(): Promise<void> {
+        if (!this.geodeClient.isConnected()) {
+            this._isConnected = false;
+            this._metrics = this._getDefaultMetrics();
+            this._updateContent();
+            return;
+        }
+
+        try {
+            const metrics = await this.geodeClient.getMetrics();
+            this._metrics = this._transformMetrics(metrics);
+            this._isConnected = true;
+        } catch (error) {
+            this._isConnected = false;
+            this._metrics = this._getDefaultMetrics();
+            vscode.window.showErrorMessage(`Failed to fetch metrics: ${error}`);
+        }
+
+        this._updateContent();
+    }
+
+    private _transformMetrics(metrics: any): PerformanceMetrics {
+        // This is a placeholder transformation.
+        // You will need to adjust this based on the actual structure of the metrics object.
+        return {
+            queriesPerSec: metrics.queries_per_sec || 0,
+            avgLatencyMs: metrics.avg_latency_ms || 0,
+            p95LatencyMs: metrics.p95_latency_ms || 0,
+            p99LatencyMs: metrics.p99_latency_ms || 0,
+            activeConnections: metrics.active_connections || 0,
+            idleConnections: metrics.idle_connections || 0,
+            totalConnections: metrics.total_connections || 0,
+            peakConnections: metrics.peak_connections || 0,
+            heapUsedBytes: metrics.heap_used_bytes || 0,
+            heapTotalBytes: metrics.heap_total_bytes || 1,
+            bufferPoolBytes: metrics.buffer_pool_bytes || 0,
+            dataSizeBytes: metrics.data_size_bytes || 0,
+            indexSizeBytes: metrics.index_size_bytes || 0,
+            walSizeBytes: metrics.wal_size_bytes || 0,
+            cacheHitRate: metrics.cache_hit_rate || 0,
+            totalNodes: metrics.total_nodes || 0,
+            totalEdges: metrics.total_edges || 0,
+            nodeLabels: metrics.node_labels || 0,
+            edgeTypes: metrics.edge_types || 0,
+            activeTransactions: metrics.active_transactions || 0,
+            commitsPerSec: metrics.commits_per_sec || 0,
+            rollbacksPerSec: metrics.rollbacks_per_sec || 0,
+            lockWaits: metrics.lock_waits || 0,
+            slowQueries: metrics.slow_queries || [],
+            latencyBuckets: metrics.latency_buckets || []
+        };
+    }
+
 
     protected getBodyContent(): string {
         return `
@@ -303,60 +366,7 @@ export class PerformanceMetricsPanel extends BaseWebviewPanel {
         };
     }
 
-    private async _fetchMetrics(): Promise<void> {
-        // In production, this would fetch from the Geode server
-        // For now, generate sample data
-        this._metrics = {
-            queriesPerSec: Math.random() * 1000,
-            avgLatencyMs: Math.random() * 10,
-            p95LatencyMs: Math.random() * 50,
-            p99LatencyMs: Math.random() * 100,
-            activeConnections: Math.floor(Math.random() * 50),
-            idleConnections: Math.floor(Math.random() * 20),
-            totalConnections: Math.floor(Math.random() * 100),
-            peakConnections: Math.floor(Math.random() * 150),
-            heapUsedBytes: Math.floor(Math.random() * 500 * 1024 * 1024),
-            heapTotalBytes: 1024 * 1024 * 1024,
-            bufferPoolBytes: Math.floor(Math.random() * 100 * 1024 * 1024),
-            dataSizeBytes: Math.floor(Math.random() * 10 * 1024 * 1024 * 1024),
-            indexSizeBytes: Math.floor(Math.random() * 2 * 1024 * 1024 * 1024),
-            walSizeBytes: Math.floor(Math.random() * 500 * 1024 * 1024),
-            cacheHitRate: Math.random() * 0.3 + 0.7,
-            totalNodes: Math.floor(Math.random() * 1000000),
-            totalEdges: Math.floor(Math.random() * 5000000),
-            nodeLabels: Math.floor(Math.random() * 20),
-            edgeTypes: Math.floor(Math.random() * 15),
-            activeTransactions: Math.floor(Math.random() * 10),
-            commitsPerSec: Math.random() * 500,
-            rollbacksPerSec: Math.random() * 10,
-            lockWaits: Math.floor(Math.random() * 5),
-            slowQueries: this._generateSampleSlowQueries(),
-            latencyBuckets: [
-                { label: '<1ms', count: Math.floor(Math.random() * 1000) },
-                { label: '1-5ms', count: Math.floor(Math.random() * 500) },
-                { label: '5-10ms', count: Math.floor(Math.random() * 200) },
-                { label: '10-50ms', count: Math.floor(Math.random() * 100) },
-                { label: '50-100ms', count: Math.floor(Math.random() * 50) },
-                { label: '>100ms', count: Math.floor(Math.random() * 20) }
-            ]
-        };
-        this._isConnected = true;
-        this._updateContent();
-    }
 
-    private _generateSampleSlowQueries(): SlowQuery[] {
-        const queries = [
-            'MATCH (n:User)-[:FOLLOWS*1..5]->(m:User) RETURN n, m LIMIT 1000',
-            'MATCH (a)-[r]->(b) WHERE a.created > datetime() - duration("P7D") RETURN count(*)',
-            'CALL algo.pageRank.stream() YIELD nodeId, score RETURN nodeId, score ORDER BY score DESC LIMIT 100'
-        ];
-        return queries.slice(0, Math.floor(Math.random() * 3) + 1).map((q, i) => ({
-            timestamp: Date.now() - i * 60000,
-            query: q,
-            durationMs: Math.random() * 500 + 100,
-            rowsReturned: Math.floor(Math.random() * 1000)
-        }));
-    }
 
     private _startAutoRefresh(interval: number): void {
         this._stopAutoRefresh();
