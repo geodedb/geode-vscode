@@ -2,10 +2,10 @@
 # =====================================
 # Single-command build and packaging
 
-.PHONY: all build compile package install install-dev uninstall clean deps lint watch help test check-deps dev publish
+.PHONY: all build compile package install install-code install-cursor install-antigravity install-dev uninstall clean deps lint watch help test check-deps dev publish
 
 # Configuration
-EXTENSION_NAME := geode-gql
+EXTENSION_NAME := geode-vscode
 VERSION := $(shell node -p "require('./package.json').version")
 VSIX_FILE := $(EXTENSION_NAME)-$(VERSION).vsix
 GEODE_BIN := $(shell command -v geode 2>/dev/null || echo "geode")
@@ -45,8 +45,33 @@ package: build
 	npm run package
 	@echo "Package created: $(VSIX_FILE)"
 
-# Install extension to VS Code
+# Install extension to VS Code, Cursor, and Antigravity
 install: package
+	@echo "Installing extension to all detected editors..."
+	@INSTALLED=0; \
+	if command -v code >/dev/null 2>&1; then \
+		echo "  Installing to VS Code..."; \
+		code --install-extension $(VSIX_FILE); \
+		INSTALLED=$$((INSTALLED + 1)); \
+	fi; \
+	if command -v cursor >/dev/null 2>&1; then \
+		echo "  Installing to Cursor..."; \
+		cursor --install-extension $(VSIX_FILE); \
+		INSTALLED=$$((INSTALLED + 1)); \
+	fi; \
+	if command -v antigravity >/dev/null 2>&1; then \
+		echo "  Installing to Antigravity..."; \
+		antigravity --install-extension $(VSIX_FILE); \
+		INSTALLED=$$((INSTALLED + 1)); \
+	fi; \
+	if [ $$INSTALLED -eq 0 ]; then \
+		echo "Error: No supported editors found (code, cursor, antigravity)"; \
+		exit 1; \
+	fi; \
+	echo "Extension installed to $$INSTALLED editor(s). Restart to activate."
+
+# Install to VS Code only
+install-code: package
 	@echo "Installing extension to VS Code..."
 	code --install-extension $(VSIX_FILE)
 	@echo "Extension installed. Restart VS Code to activate."
@@ -69,6 +94,12 @@ install-cursor: package
 	cursor --install-extension $(VSIX_FILE)
 	@echo "Extension installed. Restart Cursor to activate."
 
+# Install to Antigravity
+install-antigravity: package
+	@echo "Installing extension to Antigravity..."
+	antigravity --install-extension $(VSIX_FILE)
+	@echo "Extension installed. Restart Antigravity to activate."
+
 # Install for development (copy with dependencies)
 install-dev: build
 	@echo "Installing extension for development..."
@@ -79,10 +110,21 @@ install-dev: build
 	echo "Development extension installed to $$EXTDIR"; \
 	echo "Restart VS Code and select 'Geode GQL' for .gql files"
 
-# Uninstall extension from VS Code
+# Uninstall extension from all detected editors
 uninstall:
 	@echo "Uninstalling extension..."
-	code --uninstall-extension geode-db.$(EXTENSION_NAME) || true
+	@if command -v code >/dev/null 2>&1; then \
+		echo "  Uninstalling from VS Code..."; \
+		code --uninstall-extension geodedb.$(EXTENSION_NAME) || true; \
+	fi
+	@if command -v cursor >/dev/null 2>&1; then \
+		echo "  Uninstalling from Cursor..."; \
+		cursor --uninstall-extension geodedb.$(EXTENSION_NAME) || true; \
+	fi
+	@if command -v antigravity >/dev/null 2>&1; then \
+		echo "  Uninstalling from Antigravity..."; \
+		antigravity --uninstall-extension geodedb.$(EXTENSION_NAME) || true; \
+	fi
 	@echo "Extension uninstalled."
 
 # Watch for changes and recompile
@@ -160,7 +202,7 @@ help:
 	@echo ""
 	@echo "Quick Start:"
 	@echo "  make              Build the extension (compile TypeScript)"
-	@echo "  make install      Build, package, and install to VS Code"
+	@echo "  make install      Build, package, and install to all detected editors"
 	@echo "  make dev          Build and install for development"
 	@echo ""
 	@echo "Build Commands:"
@@ -171,12 +213,14 @@ help:
 	@echo "  make package      Create .vsix package"
 	@echo ""
 	@echo "Install Commands:"
-	@echo "  make install          Install to VS Code"
-	@echo "  make install-insiders Install to VS Code Insiders"
-	@echo "  make install-vscodium Install to VSCodium"
-	@echo "  make install-cursor   Install to Cursor"
-	@echo "  make install-dev      Install for development (symlink)"
-	@echo "  make uninstall        Uninstall from VS Code"
+	@echo "  make install              Install to all detected editors (VS Code, Cursor, Antigravity)"
+	@echo "  make install-code         Install to VS Code only"
+	@echo "  make install-cursor       Install to Cursor only"
+	@echo "  make install-antigravity  Install to Antigravity only"
+	@echo "  make install-insiders     Install to VS Code Insiders"
+	@echo "  make install-vscodium     Install to VSCodium"
+	@echo "  make install-dev          Install for development (symlink)"
+	@echo "  make uninstall            Uninstall from all detected editors"
 	@echo ""
 	@echo "Development:"
 	@echo "  make watch        Watch and recompile on changes"
