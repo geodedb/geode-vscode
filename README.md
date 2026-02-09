@@ -73,13 +73,44 @@ Full-featured GQL (Graph Query Language) and Cypher support for the Geode graph 
 - **Geode CLI** installed and in your PATH (required for LSP + query execution)
 - **Running Geode server** for query execution and schema features
 
-If you need to build Geode from source:
+Recommended Geode install methods (OS packages or Docker):
+
+**Option A: Install by OS (recommended)**
+
+Linux (Debian/Ubuntu):
 
 ```bash
-git clone https://gitlab.com/devnw/codepros/geode/geode.git
-cd geode && make build
-export PATH="$PWD/zig-out/bin:$PATH"
+curl -fsSL https://apt.geodedb.com/geode.gpg | \
+  sudo gpg --dearmor -o /usr/share/keyrings/geode-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/geode-archive-keyring.gpg] https://apt.geodedb.com stable main" | \
+  sudo tee /etc/apt/sources.list.d/geode.list
+sudo apt update
+sudo apt install geode
 ```
+
+macOS (Homebrew):
+
+```bash
+brew tap geodedb/geode
+brew install geode
+```
+
+Windows: use WSL2, then follow the Linux steps above inside WSL.
+
+**Option B: Docker (fastest server setup)**
+
+```bash
+docker run -d \
+  -p 3141:3141 \
+  -v geode-data:/var/lib/geode \
+  --name geode \
+  geodedb/geode:latest serve --listen 0.0.0.0:3141
+```
+
+Note: Even when running the server in Docker, the extension still needs the Geode CLI locally for the language server. Install the CLI via OS packages as shown above.
+
+If you need to build Geode from source (advanced/dev only), follow the
+[Geode build-from-source guide](https://geodedb.com/docs/installation/from-source/).
 
 ### Install Extension
 
