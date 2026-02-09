@@ -1,5 +1,6 @@
 // CANARY: REQ=REQ-VSCODE-TIMESERIES-001; FEATURE="TimeSeriesCharting"; ASPECT=VSCodeIntegration; STATUS=IMPL; OWNER=tooling; UPDATED=2026-01-03
 import * as vscode from 'vscode';
+import { getNonce } from '../utils/security';
 
 /**
  * Time Series and Analytics Charting Panel
@@ -61,15 +62,8 @@ export class TimeSeriesPanel {
         });
     }
 
-    private getNonce(): string {
-        let text = '';
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-        for (let i = 0; i < 32; i++) text += chars.charAt(Math.floor(Math.random() * chars.length));
-        return text;
-    }
-
     private _getHtmlContent(): string {
-        const nonce = this.getNonce();
+        const nonce = getNonce();
         // SECURITY: Data is now passed via postMessage instead of inline JSON
         // to prevent XSS attacks (Issue #31)
 

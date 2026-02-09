@@ -8,10 +8,8 @@ import {
     ServerOptions,
     TransportKind,
     ErrorAction,
-    CloseAction,
-    RevealOutputChannelOn
+    CloseAction
 } from 'vscode-languageclient/node';
-import { registerSchemaExplorer } from './views/SchemaExplorerProvider';
 import { registerQueryPlanPanel } from './panels/QueryPlanPanel';
 import { registerTimeSeriesPanel } from './panels/TimeSeriesPanel';
 import { ResultsTablePanel, QueryResults } from './panels/ResultsTablePanel';
@@ -32,7 +30,6 @@ import {
 } from './connections';
 
 // New enhanced components
-import { GeodeClientWrapper } from './client/GeodeClientWrapper';
 import { EnhancedConnectionManager } from './client/EnhancedConnectionManager';
 import {
     EnhancedSchemaExplorerProvider,
@@ -47,16 +44,17 @@ import {
     registerSavedQueriesCommands
 } from './views/SavedQueriesProvider';
 import { GeodeMCPServer, registerMCPServer } from './mcp/GeodeMCPServer';
+import { isValidBinaryPath, DEFAULT_PORT, CONNECTION_TIMEOUT_MS, QUERY_TIMEOUT_MS } from './utils/security';
 
 let client: LanguageClient | undefined;
 let statusBarItem: vscode.StatusBarItem;
 let outputChannel: vscode.OutputChannel;
 let connectionManager: EnhancedConnectionManager; // Using new manager
-let connectionsTreeProvider: ConnectionsTreeProvider;
+let _connectionsTreeProvider: ConnectionsTreeProvider;
 let schemaExplorer: EnhancedSchemaExplorerProvider; // New schema explorer
 let queryHistoryProvider: QueryHistoryProvider; // Query history tracking
 let savedQueriesProvider: SavedQueriesProvider; // Saved queries management
-let mcpServer: GeodeMCPServer; // MCP server for AI integration
+let _mcpServer: GeodeMCPServer; // MCP server for AI integration
 let isConnected = false;
 let extensionContext: vscode.ExtensionContext; // Store context for panel access
 
@@ -116,7 +114,7 @@ export async function activate(context: vscode.ExtensionContext) {
     outputChannel.appendLine('Saved queries provider registered');
 
     // Initialize MCP server for AI assistant integration
-    mcpServer = registerMCPServer(context, connectionManager.getClient(), outputChannel);
+    _mcpServer = registerMCPServer(context, connectionManager.getClient(), outputChannel);
     outputChannel.appendLine('MCP server registered');
 
     // Listen to connection changes and refresh schema
@@ -153,7 +151,7 @@ export async function activate(context: vscode.ExtensionContext) {
     updateStatusBar('disconnected');
 
     // Register connections view and commands (using compatibility layer)
-    connectionsTreeProvider = registerConnectionsView(
+    _connectionsTreeProvider = registerConnectionsView(
         context,
         connectionManager as any as OldConnectionManager, // Type bridge for compatibility
         outputChannel,
@@ -206,9 +204,6 @@ export async function activate(context: vscode.ExtensionContext) {
             }
         }
     }
-
-    // Register Schema Explorer TreeView (old implementation for backward compatibility)
-    registerSchemaExplorer(context);
 
     // Register Query Plan Visualization Panel
     registerQueryPlanPanel(context);
@@ -277,44 +272,6 @@ function isBinaryPathTrusted(binaryPath: string): boolean {
     }
 
     // Path is not in workspace (e.g., absolute system path or PATH lookup) - trusted
-    return true;
-}
-
-/**
- * SECURITY: Validate that binary path doesn't contain suspicious patterns.
- */
-function isValidBinaryPath(binaryPath: string): boolean {
-    // Reject obviously malicious patterns
-    const suspiciousPatterns = [
-        /[;&|`$]/, // Shell metacharacters
-        /\.\.[\/\\]/, // Path traversal
-        /^(sh|bash|zsh|cmd|powershell)/i, // Direct shell execution
-    ];
-
-    // Allow geode binaries with expected extensions
-    const basename = path.basename(binaryPath).toLowerCase();
-    const validNames = ['geode', 'geode.exe', 'geode.sh', 'geode.bat'];
-    if (validNames.includes(basename)) {
-        // Check for shell metacharacters even in valid names
-        for (const pattern of suspiciousPatterns.slice(0, 2)) {
-            if (pattern.test(binaryPath)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    // Reject script extensions that aren't geode
-    if (/\.(sh|bat|cmd|ps1)$/i.test(binaryPath)) {
-        return false;
-    }
-
-    for (const pattern of suspiciousPatterns) {
-        if (pattern.test(binaryPath)) {
-            return false;
-        }
-    }
-
     return true;
 }
 
@@ -1113,7 +1070,7 @@ function runGeodeQueryWithProfile(
 /**
  * Handle connecting to a Geode server
  */
-async function handleConnect(profile: ConnectionProfile, password?: string): Promise<boolean> {
+async function handleConnect(profile: ConnectionProfile, _password?: string): Promise<boolean> {
     outputChannel.appendLine(`Connecting to ${profile.name} (${profile.host}:${profile.port})...`);
     updateStatusBar('connecting', profile);
 
@@ -1144,27 +1101,6 @@ async function handleDisconnect(): Promise<void> {
     vscode.window.showInformationMessage('Disconnected from Geode server');
 }
 
-function showQueryResults(result: string) {
-    const config = vscode.workspace.getConfiguration('geode');
-    const maxResults = config.get<number>('query.maxResults', 1000);
-
-    outputChannel.appendLine('Results:');
-    outputChannel.appendLine(result);
-    outputChannel.show();
-
-    // Also show in a webview panel for better visualization
-    try {
-        const data = JSON.parse(result);
-        if (Array.isArray(data) && data.length > 0) {
-            vscode.window.showInformationMessage(
-                `Query returned ${data.length} result(s). See Output panel for details.`
-            );
-        }
-    } catch {
-        // Not JSON, just show in output
-    }
-}
-
 async function explainQuery() {
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
@@ -1179,14 +1115,14 @@ async function explainQuery() {
 
     const config = vscode.workspace.getConfiguration('geode');
     const host = config.get<string>('server.host', 'localhost');
-    const port = config.get<number>('server.port', 3141);
+    const port = config.get<number>('server.port', DEFAULT_PORT);
 
     outputChannel.appendLine(`\n--- Query Plan ---`);
     outputChannel.appendLine(query);
     outputChannel.appendLine('---');
 
     try {
-        const result = await runGeodeQuery(`EXPLAIN ${query}`, host, port, 30000);
+        const result = await runGeodeQuery(`EXPLAIN ${query}`, host, port, QUERY_TIMEOUT_MS);
         outputChannel.appendLine(result);
         outputChannel.show();
     } catch (error) {
@@ -1202,14 +1138,14 @@ async function explainQuery() {
 async function connectServer() {
     const config = vscode.workspace.getConfiguration('geode');
     const host = config.get<string>('server.host', 'localhost');
-    const port = config.get<number>('server.port', 3141);
+    const port = config.get<number>('server.port', DEFAULT_PORT);
 
     outputChannel.appendLine(`Connecting to ${host}:${port}...`);
     updateStatusBar('connecting');
 
     try {
         // Test connection with a simple query
-        await runGeodeQuery('RETURN 1', host, port, 5000);
+        await runGeodeQuery('RETURN 1', host, port, CONNECTION_TIMEOUT_MS);
         isConnected = true;
         updateStatusBar('connected');
         vscode.window.showInformationMessage(`Connected to Geode server at ${host}:${port}`);

@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import * as cp from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
+import { isValidBinaryPath, QUERY_TIMEOUT_MS } from '../utils/security';
 
 export interface ConnectionStatus {
     connected: boolean;
@@ -136,39 +137,10 @@ export class GeodeClientWrapper {
 
     /**
      * SECURITY: Validate that binary path doesn't contain suspicious patterns.
-     * Defense in depth against malicious workspace attacks.
+     * Delegates to shared utility for consistency.
      */
     private isValidBinaryPath(binaryPath: string): boolean {
-        const suspiciousPatterns = [
-            /[;&|`$]/, // Shell metacharacters
-            /\.\.[\/\\]/, // Path traversal
-            /^(sh|bash|zsh|cmd|powershell)/i, // Direct shell execution
-        ];
-
-        const basename = path.basename(binaryPath).toLowerCase();
-        const validNames = ['geode', 'geode.exe', 'geode.sh', 'geode.bat'];
-        if (validNames.includes(basename)) {
-            // Still check for metacharacters and path traversal
-            for (const pattern of suspiciousPatterns.slice(0, 2)) {
-                if (pattern.test(binaryPath)) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        // Reject non-geode script extensions
-        if (/\.(sh|bat|cmd|ps1)$/i.test(binaryPath)) {
-            return false;
-        }
-
-        for (const pattern of suspiciousPatterns) {
-            if (pattern.test(binaryPath)) {
-                return false;
-            }
-        }
-
-        return true;
+        return isValidBinaryPath(binaryPath);
     }
 
     /**
@@ -244,7 +216,7 @@ export class GeodeClientWrapper {
     /**
      * Execute a GQL query
      */
-    async query(gql: string, params?: Record<string, any>): Promise<CLIQueryResult> {
+    async query(gql: string, _params?: Record<string, any>): Promise<CLIQueryResult> {
         if (!this._isConnected || !this.config) {
             throw new Error('Not connected to Geode server. Please connect first.');
         }
@@ -296,7 +268,7 @@ export class GeodeClientWrapper {
     /**
      * Get query execution plan
      */
-    async explain(gql: string, params?: Record<string, any>): Promise<any> {
+    async explain(gql: string, _params?: Record<string, any>): Promise<any> {
         if (!this._isConnected || !this.config) {
             throw new Error('Not connected to Geode server. Please connect first.');
         }
@@ -393,7 +365,8 @@ export class GeodeClientWrapper {
     }
 
     /**
-     * Get server metrics
+     * Get server metrics using the current authenticated session.
+     * SECURITY: Uses existing connection credentials instead of hardcoded values (Issue #41).
      */
     async getMetrics(): Promise<any> {
         if (!this._isConnected || !this.config) {
@@ -401,18 +374,7 @@ export class GeodeClientWrapper {
         }
 
         try {
-            // HACK: Use hardcoded credentials to fetch metrics
-            const originalConfig = this.config;
-            this.config = {
-                ...this.config,
-                username: 'admin',
-                password: 'secret'
-            };
-
             const result = await this.runCLIQuery(`CALL cdc.get_telemetry_metrics()`);
-
-            // Restore original config
-            this.config = originalConfig;
 
             const rows = await result.toObjects();
             if (rows.length === 0) {
@@ -520,7 +482,7 @@ export class GeodeClientWrapper {
             }
 
             const proc = cp.spawn(this.geodeBinary, args, {
-                timeout: 30000,
+                timeout: QUERY_TIMEOUT_MS,
                 env: spawnEnv
             });
 

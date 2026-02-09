@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 import { BaseWebviewPanel, getWebviewOptions, WebviewPanelOptions } from './BaseWebviewPanel';
 import { GeodeClientWrapper } from '../client/GeodeClientWrapper';
+import { escapeHtml } from '../utils/security';
 
 /**
  * Real-time Performance Metrics Dashboard
@@ -313,7 +314,7 @@ export class PerformanceMetricsPanel extends BaseWebviewPanel {
             <tr>
                 <td>${new Date(q.timestamp).toLocaleTimeString()}</td>
                 <td>${q.durationMs.toFixed(2)} ms</td>
-                <td class="query-text">${this._escapeHtml(q.query.substring(0, 100))}${q.query.length > 100 ? '...' : ''}</td>
+                <td class="query-text">${escapeHtml(q.query.substring(0, 100))}${q.query.length > 100 ? '...' : ''}</td>
                 <td>${q.rowsReturned}</td>
             </tr>
         `).join('');
@@ -408,14 +409,6 @@ export class PerformanceMetricsPanel extends BaseWebviewPanel {
         if (num >= 1e6) return `${(num / 1e6).toFixed(1)}M`;
         if (num >= 1e3) return `${(num / 1e3).toFixed(1)}K`;
         return num.toString();
-    }
-
-    private _escapeHtml(text: string): string {
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
     }
 
     public dispose(): void {

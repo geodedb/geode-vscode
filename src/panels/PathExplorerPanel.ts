@@ -1,56 +1,9 @@
 // CANARY: REQ=REQ-VSCODE-PATHS-001; FEATURE="PathExplorerPanel"; ASPECT=Implementation; STATUS=IMPL; OWNER=vscode; UPDATED=2026-01-03
 import * as vscode from 'vscode';
 import { BaseWebviewPanel, getWebviewOptions, WebviewPanelOptions } from './BaseWebviewPanel';
+import { sanitizeIdentifier, escapeStringValue, escapeHtml } from '../utils/security';
 
-// Security constants for input validation
-const MAX_IDENTIFIER_LENGTH = 128;
-const MAX_STRING_VALUE_LENGTH = 10000;
 const MAX_DEPTH = 20;
-
-/**
- * Sanitize GQL identifiers (labels, relationship types, property names).
- * Returns null if the value is invalid.
- *
- * SECURITY: Prevents GQL injection by validating against allowed character pattern.
- */
-function sanitizeIdentifier(value: string | undefined | null): string | null {
-    if (!value || typeof value !== 'string') {
-        return null;
-    }
-
-    const trimmed = value.trim();
-
-    if (trimmed.length === 0 || trimmed.length > MAX_IDENTIFIER_LENGTH) {
-        return null;
-    }
-
-    // GQL identifiers: alphanumeric, underscores, must start with letter or underscore
-    const identifierPattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
-    if (!identifierPattern.test(trimmed)) {
-        return null;
-    }
-
-    return trimmed;
-}
-
-/**
- * Escape string values for safe interpolation in GQL queries.
- *
- * SECURITY: Escapes single quotes and backslashes to prevent injection.
- */
-function escapeStringValue(value: string): string {
-    if (value === null || value === undefined) {
-        return '';
-    }
-
-    const strValue = String(value);
-
-    if (strValue.length > MAX_STRING_VALUE_LENGTH) {
-        return strValue.substring(0, MAX_STRING_VALUE_LENGTH).replace(/\\/g, '\\\\').replace(/'/g, "''");
-    }
-
-    return strValue.replace(/\\/g, '\\\\').replace(/'/g, "''");
-}
 
 /**
  * Sanitize numeric depth value with bounds checking.
@@ -147,12 +100,12 @@ export class PathExplorerPanel extends BaseWebviewPanel {
                         <div class="form-group">
                             <label for="sourceNode">Source Node</label>
                             <input type="text" id="sourceNode" placeholder="Node ID or label:property"
-                                   value="${this._escapeHtml(this._searchParams.sourceNode)}">
+                                   value="${escapeHtml(this._searchParams.sourceNode)}">
                         </div>
                         <div class="form-group">
                             <label for="targetNode">Target Node</label>
                             <input type="text" id="targetNode" placeholder="Node ID or label:property"
-                                   value="${this._escapeHtml(this._searchParams.targetNode)}">
+                                   value="${escapeHtml(this._searchParams.targetNode)}">
                         </div>
                     </div>
 
@@ -249,7 +202,7 @@ export class PathExplorerPanel extends BaseWebviewPanel {
             segments.push(`
                 <div class="path-node">
                     <span class="node-icon">●</span>
-                    <span class="node-label">${this._escapeHtml(node.labels.join(':'))}</span>
+                    <span class="node-label">${escapeHtml(node.labels.join(':'))}</span>
                     <span class="node-id">#${node.id}</span>
                     ${node.properties ? `<span class="node-props">${this._formatProperties(node.properties)}</span>` : ''}
                 </div>
@@ -260,7 +213,7 @@ export class PathExplorerPanel extends BaseWebviewPanel {
                 segments.push(`
                     <div class="path-edge">
                         <span class="edge-line">──</span>
-                        <span class="edge-type">${this._escapeHtml(rel.type)}</span>
+                        <span class="edge-type">${escapeHtml(rel.type)}</span>
                         <span class="edge-arrow">→</span>
                         ${rel.properties ? `<span class="edge-props">${this._formatProperties(rel.properties)}</span>` : ''}
                     </div>
@@ -430,14 +383,6 @@ LIMIT 1`;
     private _visualizePath(pathIndex: number): void {
         // This would open the GraphViewPanel with just this path
         vscode.window.showInformationMessage(`Visualizing path ${pathIndex + 1}`);
-    }
-
-    private _escapeHtml(text: string): string {
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
     }
 
     public dispose(): void {

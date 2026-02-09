@@ -282,7 +282,7 @@ export function registerConnectionsView(
             }
         }),
 
-        vscode.commands.registerCommand('geode.connections.disconnect', async (item?: ConnectionTreeItem) => {
+        vscode.commands.registerCommand('geode.connections.disconnect', async (_item?: ConnectionTreeItem) => {
             onDisconnect();
             treeProvider.clearConnections();
         }),

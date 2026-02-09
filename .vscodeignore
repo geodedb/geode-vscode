@@ -7,6 +7,24 @@ src/test/**
 **/*.map
 zig-cache/**
 zig-out/**
+# SECURITY: Don't ship self-signed certs (Issue #51)
+data/**
+# Quality: Don't ship development files (Issue #75)
+Makefile
+scripts/**
+.pre-commit-config.yaml
+.gitleaks.toml
+.gitlab/**
+.gitlab-ci.yml
+docs/**
+.editorconfig
+CODEOWNERS
+CODE_OF_CONDUCT.md
+CONTRIBUTING.md
+SECURITY.md
+NOTICE
+LSP_GAPS.md
+eslint.config.mjs
 # Don't exclude node_modules - vsce needs them for dependency bundling
 # node_modules/@types/**
 # node_modules/typescript/**

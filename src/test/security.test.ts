@@ -319,11 +319,6 @@ describe('Security Tests', () => {
     describe('Content Security Policy', () => {
         it('CSP uses nonce for scripts', () => {
             // The CSP pattern used in the extension
-            const cspPattern = /script-src 'nonce-[A-Za-z0-9]{32}'/;
-
-            // Example CSP from the panels
-            const exampleCSP = "script-src 'nonce-abc123def456789012345678901234'";
-
             // Verify nonce pattern is 32 chars alphanumeric
             const noncePattern = /^[A-Za-z0-9]{32}$/;
             assert.strictEqual(noncePattern.test('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef'), true);

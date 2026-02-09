@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { BaseWebviewPanel, getWebviewOptions, WebviewPanelOptions } from './BaseWebviewPanel';
+import { escapeHtml } from '../utils/security';
 
 /**
  * Graph node data structure
@@ -88,6 +89,7 @@ export class GraphViewPanel extends BaseWebviewPanel {
 
     /**
      * Update the panel with new graph data.
+     * SECURITY: Uses postMessage to pass data to webview instead of inline JSON.
      */
     public setGraphData(data: GraphData, query?: string) {
         this._graphData = data;
@@ -95,6 +97,8 @@ export class GraphViewPanel extends BaseWebviewPanel {
             this._query = query;
         }
         this._updateContent();
+        // SECURITY: Send data via postMessage instead of inline JSON.stringify
+        this.postMessage({ type: 'setGraphData', graphData: data, layout: this._layout });
     }
 
     /**
@@ -231,8 +235,8 @@ export class GraphViewPanel extends BaseWebviewPanel {
                         <span class="filter-label">Labels:</span>
                         ${labels.map(label => `
                             <label class="geode-checkbox">
-                                <input type="checkbox" checked onchange="toggleLabel('${this._escapeHtml(label)}', this.checked)">
-                                <span>${this._escapeHtml(label)}</span>
+                                <input type="checkbox" checked onchange="toggleLabel('${escapeHtml(label)}', this.checked)">
+                                <span>${escapeHtml(label)}</span>
                             </label>
                         `).join('')}
                     </div>
@@ -242,8 +246,8 @@ export class GraphViewPanel extends BaseWebviewPanel {
                         <span class="filter-label">Edge Types:</span>
                         ${edgeTypes.map(type => `
                             <label class="geode-checkbox">
-                                <input type="checkbox" checked onchange="toggleEdgeType('${this._escapeHtml(type)}', this.checked)">
-                                <span>${this._escapeHtml(type)}</span>
+                                <input type="checkbox" checked onchange="toggleEdgeType('${escapeHtml(type)}', this.checked)">
+                                <span>${escapeHtml(type)}</span>
                             </label>
                         `).join('')}
                     </div>
@@ -262,11 +266,7 @@ export class GraphViewPanel extends BaseWebviewPanel {
                 </div>
             </div>
 
-            <script>
-                // Pass graph data to the visualization script
-                window.graphData = ${JSON.stringify(this._graphData)};
-                window.initialLayout = '${this._layout}';
-            </script>
+            <!-- SECURITY: Graph data is passed via postMessage instead of inline JSON -->
         `;
     }
 
@@ -292,15 +292,6 @@ export class GraphViewPanel extends BaseWebviewPanel {
                 </p>
             </div>
         `;
-    }
-
-    private _escapeHtml(text: string): string {
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
     }
 
     public dispose() {

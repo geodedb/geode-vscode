@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
-import * as fs from 'fs';
+import { getNonce } from '../utils/security';
 
 /**
  * Base class for Geode webview panels.
@@ -127,7 +126,7 @@ export abstract class BaseWebviewPanel {
             .map(uri => `<link href="${uri}" rel="stylesheet">`)
             .join('\n        ');
         const additionalScripts = this.getScripts()
-            .map(uri => `<script src="${uri}"></script>`)
+            .map(uri => `<script nonce="${nonce}" src="${uri}"></script>`)
             .join('\n        ');
 
         // Use a nonce to only allow specific scripts to run
@@ -178,15 +177,10 @@ export abstract class BaseWebviewPanel {
     }
 
     /**
-     * Generate a random nonce for CSP.
+     * Generate a cryptographically secure nonce for CSP.
      */
     private _getNonce(): string {
-        let text = '';
-        const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-        for (let i = 0; i < 32; i++) {
-            text += possible.charAt(Math.floor(Math.random() * possible.length));
-        }
-        return text;
+        return getNonce();
     }
 
     /**

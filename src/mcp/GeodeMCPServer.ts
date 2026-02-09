@@ -7,84 +7,25 @@
 
 import * as vscode from 'vscode';
 import { GeodeClientWrapper } from '../client/GeodeClientWrapper';
+import {
+    sanitizeIdentifier as _sanitizeId,
+    escapeStringValue as _escapeStr,
+} from '../utils/security';
 
 /**
- * GQL Input Sanitization Utilities
- *
- * These functions prevent GQL injection attacks by validating and sanitizing
- * user input before interpolation into queries.
- */
-
-/**
- * Valid pattern for GQL identifiers (labels, relationship types, property names).
- * Must start with a letter and contain only alphanumeric characters and underscores.
- */
-const GQL_IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/;
-
-/**
- * Maximum length for identifiers to prevent DoS via excessively long inputs
- */
-const MAX_IDENTIFIER_LENGTH = 128;
-
-/**
- * Maximum length for string values
- */
-const MAX_STRING_VALUE_LENGTH = 10000;
-
-/**
- * Validate and sanitize a GQL identifier (label, relationship type, property name).
- * Throws an error if the identifier is invalid.
- *
- * @param value - The identifier to validate
- * @param type - Description of the identifier type for error messages
- * @returns The validated identifier
- * @throws Error if the identifier is invalid
+ * Validate and sanitize a GQL identifier, throwing on invalid input.
+ * Wrapper around shared utility for backward compatibility.
  */
 function sanitizeIdentifier(value: string, type: string): string {
-    if (!value || typeof value !== 'string') {
-        throw new Error(`${type} is required`);
-    }
-
-    const trimmed = value.trim();
-
-    if (trimmed.length === 0) {
-        throw new Error(`${type} cannot be empty`);
-    }
-
-    if (trimmed.length > MAX_IDENTIFIER_LENGTH) {
-        throw new Error(`${type} exceeds maximum length of ${MAX_IDENTIFIER_LENGTH} characters`);
-    }
-
-    if (!GQL_IDENTIFIER_PATTERN.test(trimmed)) {
-        throw new Error(
-            `Invalid ${type}: "${trimmed}". Must start with a letter and contain only ` +
-            `alphanumeric characters and underscores.`
-        );
-    }
-
-    return trimmed;
+    return _sanitizeId(value, { type, throwOnInvalid: true })!;
 }
 
 /**
- * Escape a string value for safe interpolation in GQL queries.
- * Escapes single quotes by doubling them.
- *
- * @param value - The string value to escape
- * @returns The escaped string (without surrounding quotes)
+ * Escape a string value for safe GQL interpolation, throwing on overflow.
+ * Wrapper around shared utility for backward compatibility.
  */
 function escapeStringValue(value: string): string {
-    if (value === null || value === undefined) {
-        return '';
-    }
-
-    const strValue = String(value);
-
-    if (strValue.length > MAX_STRING_VALUE_LENGTH) {
-        throw new Error(`String value exceeds maximum length of ${MAX_STRING_VALUE_LENGTH} characters`);
-    }
-
-    // Escape single quotes by doubling them, and escape backslashes
-    return strValue.replace(/\\/g, '\\\\').replace(/'/g, "''");
+    return _escapeStr(value, true);
 }
 
 /**

@@ -1,7 +1,7 @@
 // CANARY: REQ=REQ-VSCODE-SCHEMA-EXPLORER-001; FEATURE="SchemaExplorerTreeView"; ASPECT=VSCodeIntegration; STATUS=IMPL; OWNER=tooling; UPDATED=2026-01-30
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
-import * as path from 'path';
+import { isValidBinaryPath, DEFAULT_PORT } from '../utils/security';
 
 /**
  * Schema Explorer Tree View Provider
@@ -78,7 +78,7 @@ export class SchemaExplorerProvider implements vscode.TreeDataProvider<SchemaTre
     private schemaData: SchemaElement[] = [];
     private geodeCommand: string = 'geode';
     private serverHost: string = 'localhost';
-    private serverPort: number = 3141;
+    private serverPort: number = DEFAULT_PORT;
     private isInsecure: boolean = false;
 
     constructor() {
@@ -86,52 +86,17 @@ export class SchemaExplorerProvider implements vscode.TreeDataProvider<SchemaTre
     }
 
     /**
-     * SECURITY: Validate binary path to prevent malicious workspace attacks
-     * Mirrors validation from GeodeClientWrapper for consistency
+     * SECURITY: Validate binary path to prevent malicious workspace attacks.
+     * Delegates to shared utility for consistency.
      */
     private isValidBinaryPath(binaryPath: string): boolean {
-        // Normalize path separators for consistent checking across platforms
-        const normalizedPath = binaryPath.replace(/\\/g, '/');
-
-        const suspiciousPatterns = [
-            /[;&|`$]/, // Shell metacharacters
-            /\.\.\//, // Path traversal (normalized to forward slash)
-        ];
-
-        // Check for shell metacharacters and path traversal first
-        for (const pattern of suspiciousPatterns) {
-            if (pattern.test(normalizedPath)) {
-                return false;
-            }
-        }
-
-        // Extract basename from normalized path for cross-platform compatibility
-        const parts = normalizedPath.split('/');
-        const basename = parts[parts.length - 1].toLowerCase();
-
-        // Reject direct shell execution attempts
-        const shellExecutables = ['sh', 'bash', 'zsh', 'cmd', 'cmd.exe', 'powershell', 'powershell.exe'];
-        if (shellExecutables.includes(basename)) {
-            return false;
-        }
-
-        const validNames = ['geode', 'geode.exe', 'geode.sh', 'geode.bat'];
-        if (validNames.includes(basename)) {
-            return true;
-        }
-
-        // Reject non-geode script extensions
-        if (/\.(sh|bat|cmd|ps1)$/i.test(basename)) {
-            return false;
-        }
-
-        return true;
+        return isValidBinaryPath(binaryPath);
     }
 
     private loadConfiguration(): void {
         const config = vscode.workspace.getConfiguration('geode');
         this.serverHost = config.get<string>('server.host', 'localhost');
-        this.serverPort = config.get<number>('server.port', 3141);
+        this.serverPort = config.get<number>('server.port', DEFAULT_PORT);
         this.isInsecure = config.get<boolean>('server.insecure', false);
 
         // SECURITY: Issue #34 - Warn when insecure TLS is enabled
@@ -251,7 +216,7 @@ export class SchemaExplorerProvider implements vscode.TreeDataProvider<SchemaTre
                     }]
                 }
             ];
-        } catch (error) {
+        } catch {
             // If queries fail, show placeholder with connection info
             this.schemaData = [
                 {
@@ -445,6 +410,10 @@ export class SchemaExplorerProvider implements vscode.TreeDataProvider<SchemaTre
         return [];
     }
 
+    /**
+     * SECURITY: Query is passed via stdin to prevent CLI option injection (Issue #48).
+     * The `--` separator prevents query content from being interpreted as flags.
+     */
     private runQuery(query: string): Promise<string> {
         return new Promise((resolve, reject) => {
             const args = ['query', '--server', `${this.serverHost}:${this.serverPort}`, '--format', 'json'];
@@ -453,22 +422,23 @@ export class SchemaExplorerProvider implements vscode.TreeDataProvider<SchemaTre
                 args.push('--insecure');
             }
 
-            args.push(query);
+            // SECURITY: Use -- separator and stdin to prevent injection
+            args.push('--', '-');
 
-            const process = cp.spawn(this.geodeCommand, args, { timeout: 10000 });
+            const proc = cp.spawn(this.geodeCommand, args, { timeout: 10000 });
 
             let stdout = '';
             let stderr = '';
 
-            process.stdout.on('data', (data) => {
+            proc.stdout.on('data', (data: Buffer) => {
                 stdout += data.toString();
             });
 
-            process.stderr.on('data', (data) => {
+            proc.stderr.on('data', (data: Buffer) => {
                 stderr += data.toString();
             });
 
-            process.on('close', (code) => {
+            proc.on('close', (code: number | null) => {
                 if (code === 0) {
                     resolve(stdout);
                 } else {
@@ -476,9 +446,13 @@ export class SchemaExplorerProvider implements vscode.TreeDataProvider<SchemaTre
                 }
             });
 
-            process.on('error', (err) => {
+            proc.on('error', (err: Error) => {
                 reject(err.message);
             });
+
+            // Pass query via stdin
+            proc.stdin.write(query);
+            proc.stdin.end();
         });
     }
 }

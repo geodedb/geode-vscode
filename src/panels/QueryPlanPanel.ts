@@ -1,5 +1,6 @@
 // CANARY: REQ=REQ-VSCODE-QUERY-PLAN-001; FEATURE="QueryPlanVisualization"; ASPECT=VSCodeIntegration; STATUS=IMPL; OWNER=tooling; UPDATED=2026-01-03
 import * as vscode from 'vscode';
+import { getNonce } from '../utils/security';
 
 /**
  * Query Plan Visualization Panel
@@ -81,17 +82,8 @@ export class QueryPlanPanel {
         });
     }
 
-    private getNonce(): string {
-        let text = '';
-        const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-        for (let i = 0; i < 32; i++) {
-            text += possible.charAt(Math.floor(Math.random() * possible.length));
-        }
-        return text;
-    }
-
     private _getHtmlContent(): string {
-        const nonce = this.getNonce();
+        const nonce = getNonce();
         // SECURITY: Data is now passed via postMessage instead of inline JSON
         // to prevent XSS attacks (Issue #31)
 

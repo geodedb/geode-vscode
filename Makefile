@@ -13,10 +13,10 @@ GEODE_BIN := $(shell command -v geode 2>/dev/null || echo "geode")
 # Default target
 all: build
 
-# Install dependencies
+# Install dependencies (SECURITY: use npm ci for reproducible builds, Issue #53)
 deps:
 	@echo "Installing dependencies..."
-	npm install
+	npm ci
 
 # Check if dependencies are installed
 check-deps:
@@ -30,10 +30,10 @@ compile: check-deps
 	@echo "Compiling TypeScript..."
 	npm run compile
 
-# Lint the source code
+# Lint the source code (SECURITY: removed || true to fail on lint errors, Issues #20, #14)
 lint: check-deps
 	@echo "Linting source code..."
-	npm run lint || true
+	npm run lint
 
 # Build (compile + lint)
 build: compile

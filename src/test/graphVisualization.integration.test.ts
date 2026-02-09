@@ -93,7 +93,7 @@ describe('Graph Visualization CLI Integration Tests', () => {
                     output.includes('--format') || output.includes('format'),
                     'Should have format option'
                 );
-            } catch (error) {
+            } catch {
                 this.skip();
             }
         });

@@ -463,19 +463,44 @@ export function registerSavedQueriesCommands(
 
             try {
                 const content = await vscode.workspace.fs.readFile(uris[0]);
-                const queries = JSON.parse(content.toString()) as SavedQuery[];
+                const parsed = JSON.parse(content.toString());
+
+                // SECURITY: Validate imported data structure (Issue #50)
+                if (!Array.isArray(parsed)) {
+                    vscode.window.showErrorMessage('Invalid import file: expected an array of queries');
+                    return;
+                }
+
+                const MAX_IMPORT_COUNT = 1000;
+                const MAX_FIELD_LENGTH = 10000;
+                if (parsed.length > MAX_IMPORT_COUNT) {
+                    vscode.window.showErrorMessage(`Import file contains ${parsed.length} queries (max ${MAX_IMPORT_COUNT})`);
+                    return;
+                }
 
                 let imported = 0;
-                for (const query of queries) {
-                    if (query.name && query.query) {
-                        await provider.saveQuery({
-                            name: query.name,
-                            query: query.query,
-                            description: query.description,
-                            category: query.category
-                        });
-                        imported++;
+                for (const entry of parsed) {
+                    // Validate each entry has required string fields
+                    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+                        continue;
                     }
+                    if (typeof entry.name !== 'string' || typeof entry.query !== 'string') {
+                        continue;
+                    }
+                    // Bound string lengths to prevent DoS
+                    const name = entry.name.slice(0, MAX_FIELD_LENGTH);
+                    const query = entry.query.slice(0, MAX_FIELD_LENGTH);
+                    if (!name.trim() || !query.trim()) {
+                        continue;
+                    }
+                    // Only accept known string properties; strip extras
+                    const description = typeof entry.description === 'string'
+                        ? entry.description.slice(0, MAX_FIELD_LENGTH) : undefined;
+                    const category = typeof entry.category === 'string'
+                        ? entry.category.slice(0, MAX_FIELD_LENGTH) : undefined;
+
+                    await provider.saveQuery({ name, query, description, category });
+                    imported++;
                 }
 
                 vscode.window.showInformationMessage(`Imported ${imported} queries`);

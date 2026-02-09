@@ -15,61 +15,7 @@
 
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
-
-/**
- * GQL Input Sanitization Utilities
- *
- * These functions prevent GQL injection attacks by validating and sanitizing
- * user input before interpolation into queries.
- */
-
-/** Valid pattern for GQL identifiers (labels, relationship types, property names). */
-const GQL_IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/;
-
-/** Maximum length for identifiers */
-const MAX_IDENTIFIER_LENGTH = 128;
-
-/** Maximum length for string values */
-const MAX_STRING_VALUE_LENGTH = 10000;
-
-/**
- * Validate and sanitize a GQL identifier (label, relationship type, property name).
- * Returns null if invalid instead of throwing, for graceful handling in visualization.
- */
-function sanitizeIdentifier(value: string | undefined | null): string | null {
-    if (!value || typeof value !== 'string') {
-        return null;
-    }
-
-    const trimmed = value.trim();
-
-    if (trimmed.length === 0 || trimmed.length > MAX_IDENTIFIER_LENGTH) {
-        return null;
-    }
-
-    if (!GQL_IDENTIFIER_PATTERN.test(trimmed)) {
-        return null;
-    }
-
-    return trimmed;
-}
-
-/**
- * Escape a string value for safe interpolation in GQL queries.
- */
-function escapeStringValue(value: string): string {
-    if (value === null || value === undefined) {
-        return '';
-    }
-
-    const strValue = String(value);
-
-    if (strValue.length > MAX_STRING_VALUE_LENGTH) {
-        return strValue.substring(0, MAX_STRING_VALUE_LENGTH).replace(/\\/g, '\\\\').replace(/'/g, "''");
-    }
-
-    return strValue.replace(/\\/g, '\\\\').replace(/'/g, "''");
-}
+import { sanitizeIdentifier, escapeStringValue, getNonce } from '../utils/security';
 
 /**
  * Validate and sanitize a numeric value with bounds.
@@ -471,18 +417,14 @@ export class GraphVisualizationPanel {
             { enableScripts: true }
         );
 
-        const labels = node.labels || [];
-        const props = node.properties || {};
+        const nonce = getNonce();
 
-        let propsHtml = '';
-        for (const [key, value] of Object.entries(props)) {
-            propsHtml += `<tr><td><strong>${this._escapeHtml(key)}</strong></td><td><code>${this._escapeHtml(JSON.stringify(value))}</code></td></tr>`;
-        }
-
+        // SECURITY: CSP with nonce, data via postMessage (Issue #43)
         panel.webview.html = `<!DOCTYPE html>
 <html>
 <head>
-    <style>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
+    <style nonce="${nonce}">
         body { font-family: var(--vscode-font-family); padding: 16px; }
         h2 { color: var(--vscode-foreground); border-bottom: 1px solid var(--vscode-panel-border); padding-bottom: 8px; }
         .labels { display: flex; gap: 8px; margin-bottom: 16px; }
@@ -496,40 +438,85 @@ export class GraphVisualizationPanel {
     </style>
 </head>
 <body>
-    <h2>Node: ${this._escapeHtml(node.id)}</h2>
-
-    ${labels.length > 0 ? `<div class="labels">${labels.map((l: string) => `<span class="label">:${this._escapeHtml(l)}</span>`).join('')}</div>` : ''}
-
+    <h2 id="nodeTitle"></h2>
+    <div id="labelsContainer"></div>
     <h3>Properties</h3>
-    <table>${propsHtml || '<tr><td colspan="2"><em>No properties</em></td></tr>'}</table>
-
+    <table id="propsTable"></table>
     <div class="actions">
-        <button onclick="copyId()">Copy ID</button>
-        <button onclick="copyJson()">Copy as JSON</button>
+        <button id="copyIdBtn">Copy ID</button>
+        <button id="copyJsonBtn">Copy as JSON</button>
     </div>
 
-    <script>
-        const vscode = acquireVsCodeApi();
-        const nodeData = ${JSON.stringify(node)};
+    <script nonce="${nonce}">
+        var vscode = acquireVsCodeApi();
+        var nodeData = null;
 
-        function copyId() {
-            navigator.clipboard.writeText('${node.id}');
+        window.addEventListener('message', function(event) {
+            var msg = event.data;
+            if (msg.type === 'setNodeData') {
+                nodeData = msg.node;
+                renderNode(nodeData);
+            }
+        });
+
+        function esc(text) {
+            var d = document.createElement('div');
+            d.textContent = text;
+            return d.textContent;
         }
 
-        function copyJson() {
-            navigator.clipboard.writeText(JSON.stringify(nodeData, null, 2));
+        function renderNode(node) {
+            document.getElementById('nodeTitle').textContent = 'Node: ' + node.id;
+
+            var labelsEl = document.getElementById('labelsContainer');
+            var labels = node.labels || [];
+            if (labels.length > 0) {
+                labelsEl.className = 'labels';
+                labels.forEach(function(l) {
+                    var span = document.createElement('span');
+                    span.className = 'label';
+                    span.textContent = ':' + l;
+                    labelsEl.appendChild(span);
+                });
+            }
+
+            var table = document.getElementById('propsTable');
+            var props = node.properties || {};
+            var keys = Object.keys(props);
+            if (keys.length === 0) {
+                var row = table.insertRow();
+                var cell = row.insertCell();
+                cell.colSpan = 2;
+                var em = document.createElement('em');
+                em.textContent = 'No properties';
+                cell.appendChild(em);
+            } else {
+                keys.forEach(function(key) {
+                    var row = table.insertRow();
+                    var keyCell = row.insertCell();
+                    var strong = document.createElement('strong');
+                    strong.textContent = key;
+                    keyCell.appendChild(strong);
+                    var valCell = row.insertCell();
+                    var code = document.createElement('code');
+                    code.textContent = JSON.stringify(props[key]);
+                    valCell.appendChild(code);
+                });
+            }
         }
+
+        document.getElementById('copyIdBtn').addEventListener('click', function() {
+            if (nodeData) { navigator.clipboard.writeText(String(nodeData.id)); }
+        });
+        document.getElementById('copyJsonBtn').addEventListener('click', function() {
+            if (nodeData) { navigator.clipboard.writeText(JSON.stringify(nodeData, null, 2)); }
+        });
     </script>
 </body>
 </html>`;
-    }
 
-    private _escapeHtml(text: string): string {
-        return String(text)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
+        // SECURITY: Pass data via postMessage instead of inline JSON.stringify
+        panel.webview.postMessage({ type: 'setNodeData', node });
     }
 
     private _showNodeDetails(node: any): void {
@@ -589,7 +576,7 @@ export class GraphVisualizationPanel {
     }
 
     private _getHtmlContent(): string {
-        const nonce = this._getNonce();
+        const nonce = getNonce();
 
         return `<!DOCTYPE html>
 <html lang="en">
@@ -2251,15 +2238,6 @@ export class GraphVisualizationPanel {
     </script>
 </body>
 </html>`;
-    }
-
-    private _getNonce(): string {
-        let text = '';
-        const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-        for (let i = 0; i < 32; i++) {
-            text += possible.charAt(Math.floor(Math.random() * possible.length));
-        }
-        return text;
     }
 
     public dispose(): void {

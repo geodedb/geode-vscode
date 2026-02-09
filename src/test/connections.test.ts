@@ -63,7 +63,7 @@ class MockGlobalState {
     }
 }
 
-class MockOutputChannel {
+class _MockOutputChannel {
     private lines: string[] = [];
 
     appendLine(line: string): void {
@@ -533,7 +533,7 @@ describe('CLI Integration Tests', () => {
                 'query', '--server', '127.0.0.1:3141', '--insecure', '--timeout', '1',
                 '-U', 'testuser', 'RETURN 1'
             ], { encoding: 'utf8', stdio: 'pipe' });
-        } catch (error: unknown) {
+        } catch (_error: unknown) {
             // Any error here is acceptable since we just want to verify the CLI runs
             assert.ok(true, 'CLI executed with -U flag');
         }

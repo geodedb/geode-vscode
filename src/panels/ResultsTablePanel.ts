@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { BaseWebviewPanel, getWebviewOptions, WebviewPanelOptions } from './BaseWebviewPanel';
+import { escapeHtml } from '../utils/security';
 
 /**
  * Query result row data structure
@@ -220,7 +221,7 @@ export class ResultsTablePanel extends BaseWebviewPanel {
 
                 ${this._query ? `
                 <div class="query-display">
-                    <code>${this._escapeHtml(this._query)}</code>
+                    <code>${escapeHtml(this._query)}</code>
                 </div>
                 ` : ''}
 
@@ -230,7 +231,7 @@ export class ResultsTablePanel extends BaseWebviewPanel {
                             <tr>
                                 ${columns.map((col, i) => `
                                     <th class="sortable" data-column="${i}" onclick="sortColumn(${i})">
-                                        ${this._escapeHtml(col)}
+                                        ${escapeHtml(col)}
                                     </th>
                                 `).join('')}
                             </tr>
@@ -285,26 +286,17 @@ export class ResultsTablePanel extends BaseWebviewPanel {
 
         if (typeof value === 'object') {
             if (Array.isArray(value)) {
-                return `<span class="array-value" title="${this._escapeHtml(JSON.stringify(value))}">[${value.length} items]</span>`;
+                return `<span class="array-value" title="${escapeHtml(JSON.stringify(value))}">[${value.length} items]</span>`;
             }
-            return `<span class="object-value" title="${this._escapeHtml(JSON.stringify(value))}">{...}</span>`;
+            return `<span class="object-value" title="${escapeHtml(JSON.stringify(value))}">{...}</span>`;
         }
 
         const strValue = String(value);
         if (strValue.length > 100) {
-            return `<span class="truncated-value" title="${this._escapeHtml(strValue)}">${this._escapeHtml(strValue.slice(0, 100))}...</span>`;
+            return `<span class="truncated-value" title="${escapeHtml(strValue)}">${escapeHtml(strValue.slice(0, 100))}...</span>`;
         }
 
-        return this._escapeHtml(strValue);
-    }
-
-    private _escapeHtml(text: string): string {
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
+        return escapeHtml(strValue);
     }
 
     public dispose() {

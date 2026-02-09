@@ -5,6 +5,7 @@
 import * as vscode from 'vscode';
 import { GeodeClientWrapper, ConnectionStatus, GeodeConfig } from './GeodeClientWrapper';
 import { warnIfInsecure } from '../connections/ConnectionManager';
+import { DEFAULT_PORT, CONNECTION_TIMEOUT_MS, QUERY_TIMEOUT_MS } from '../utils/security';
 
 /**
  * Safely merge object properties while preventing prototype pollution.
@@ -12,20 +13,33 @@ import { warnIfInsecure } from '../connections/ConnectionManager';
  * SECURITY: Filters out dangerous keys (__proto__, constructor, prototype)
  * that could pollute Object.prototype if malicious data is merged.
  */
+/**
+ * Safely merge object properties while preventing prototype pollution.
+ *
+ * SECURITY: Recursively filters dangerous keys (__proto__, constructor, prototype)
+ * at all nesting levels to prevent prototype pollution attacks (Issue #49).
+ */
 function safeMerge<T extends object>(target: T, source: Partial<T>): T {
-    const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
+    const dangerousKeys = new Set(['__proto__', 'constructor', 'prototype']);
 
-    if (!source || typeof source !== 'object') {
+    if (!source || typeof source !== 'object' || Array.isArray(source)) {
         return target;
     }
 
     for (const key of Object.keys(source)) {
-        if (!dangerousKeys.includes(key) && Object.prototype.hasOwnProperty.call(source, key)) {
-            const value = (source as any)[key];
-            // Only assign primitive values and safe objects
-            if (value !== undefined) {
-                (target as any)[key] = value;
-            }
+        if (dangerousKeys.has(key) || !Object.prototype.hasOwnProperty.call(source, key)) {
+            continue;
+        }
+        const value = (source as any)[key];
+        if (value === undefined) {
+            continue;
+        }
+        // SECURITY: Recursively apply safeMerge for nested objects
+        if (value !== null && typeof value === 'object' && !Array.isArray(value)
+            && typeof (target as any)[key] === 'object' && (target as any)[key] !== null) {
+            (target as any)[key] = safeMerge((target as any)[key], value);
+        } else {
+            (target as any)[key] = value;
         }
     }
 
@@ -101,8 +115,8 @@ export class EnhancedConnectionManager {
             useTLS: profile.useTLS || profile.useTls || false,
             insecure: profile.insecure || false, // Ensure insecure is always set
             isDefault: profile.isDefault || false,
-            timeout: profile.timeout || 5000,
-            queryTimeout: profile.queryTimeout || 30000
+            timeout: profile.timeout || CONNECTION_TIMEOUT_MS,
+            queryTimeout: profile.queryTimeout || QUERY_TIMEOUT_MS
         };
 
         // Store password in secret storage
@@ -425,7 +439,7 @@ export class EnhancedConnectionManager {
         }
 
         dsn += profile.host;
-        if (profile.port !== 3141) {
+        if (profile.port !== DEFAULT_PORT) {
             dsn += ':' + profile.port;
         }
 
@@ -509,10 +523,10 @@ export class EnhancedConnectionManager {
                 profile.isDefault = false;
             }
             if (profile.timeout === undefined) {
-                profile.timeout = 5000;
+                profile.timeout = CONNECTION_TIMEOUT_MS;
             }
             if (profile.queryTimeout === undefined) {
-                profile.queryTimeout = 30000;
+                profile.queryTimeout = QUERY_TIMEOUT_MS;
             }
             this.profiles.set(profile.id, profile);
         }

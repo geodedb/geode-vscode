@@ -6,7 +6,7 @@
 import * as assert from 'assert';
 
 // Mock vscode module for testing
-const mockVscode = {
+const _mockVscode = {
     window: {
         createWebviewPanel: () => ({
             webview: {

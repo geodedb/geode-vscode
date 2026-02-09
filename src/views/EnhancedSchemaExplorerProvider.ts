@@ -4,68 +4,18 @@
 
 import * as vscode from 'vscode';
 import { GeodeClientWrapper, SchemaInfo } from '../client/GeodeClientWrapper';
-
-// Security constants for input validation
-const MAX_IDENTIFIER_LENGTH = 128;
+import { sanitizeIdentifier as _sanitizeId, escapeHtml, getNonce } from '../utils/security';
 
 /**
- * Sanitize GQL identifiers (labels, relationship types, property names).
- * Throws an error if the value is invalid.
- *
- * SECURITY: Prevents GQL injection by validating against allowed character pattern.
+ * Validate and sanitize a GQL identifier, throwing on invalid input.
  */
 function sanitizeIdentifier(value: string, type: string): string {
-    if (!value || typeof value !== 'string') {
-        throw new Error(`${type} is required`);
-    }
-
-    const trimmed = value.trim();
-
-    if (trimmed.length === 0) {
-        throw new Error(`${type} cannot be empty`);
-    }
-
-    if (trimmed.length > MAX_IDENTIFIER_LENGTH) {
-        throw new Error(`${type} exceeds maximum length of ${MAX_IDENTIFIER_LENGTH}`);
-    }
-
-    // GQL identifiers: alphanumeric, underscores, must start with letter or underscore
-    const identifierPattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
-    if (!identifierPattern.test(trimmed)) {
-        throw new Error(`${type} contains invalid characters. Only alphanumeric characters and underscores are allowed.`);
-    }
-
-    return trimmed;
+    const result = _sanitizeId(value, { type, throwOnInvalid: true });
+    return result!;
 }
 
-/**
- * Escape HTML special characters to prevent XSS.
- *
- * SECURITY: Escapes characters that have special meaning in HTML.
- */
-function escapeHtml(text: string): string {
-    if (text === null || text === undefined) {
-        return '';
-    }
-    return String(text)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#x27;');
-}
-
-/**
- * Generate a random nonce for CSP.
- */
-function generateNonce(): string {
-    let text = '';
-    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    for (let i = 0; i < 32; i++) {
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
-    }
-    return text;
-}
+/** @deprecated Use getNonce() */
+const generateNonce = getNonce;
 
 export class EnhancedSchemaExplorerProvider implements vscode.TreeDataProvider<SchemaTreeItem> {
     private _onDidChangeTreeData = new vscode.EventEmitter<SchemaTreeItem | undefined | void>();

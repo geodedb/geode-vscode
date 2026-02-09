@@ -27,7 +27,6 @@ repos:
 
       # Syntax validation
       - id: check-yaml
-        args: [--unsafe]
         exclude: ^(node_modules/)
       - id: check-json
         exclude: ^(node_modules/)
@@ -45,6 +44,14 @@ repos:
       - id: check-case-conflict
       - id: check-symlinks
       - id: destroyed-symlinks
+
+  # =============================================================================
+  # Secret scanning (Issue #54)
+  # =============================================================================
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.0
+    hooks:
+      - id: gitleaks
 
   # =============================================================================
   # Markdown linting
@@ -106,14 +113,22 @@ repos:
         pass_filenames: false
         stages: [pre-push]
 
-      # Check for TODO/FIXME in committed code (warning only)
+      # Check for TODO/FIXME in committed code (warning, non-blocking)
+      # SECURITY: Fixed to properly report findings (Issue #58)
       - id: check-todos
         name: check for TODOs/FIXMEs
         entry: bash
         args:
           - -c
           - |
-            git diff --cached --name-only | xargs grep -l -E "(TODO|FIXME|XXX|HACK)" 2>/dev/null && echo "Warning: Found TODO/FIXME markers in staged files" && exit 0 || exit 0
+            files=$(git diff --cached --name-only 2>/dev/null)
+            if [ -z "$files" ]; then exit 0; fi
+            matches=$(echo "$files" | xargs grep -l -E "(TODO|FIXME|XXX|HACK)" 2>/dev/null || true)
+            if [ -n "$matches" ]; then
+              echo "Warning: Found TODO/FIXME markers in staged files:"
+              echo "$matches"
+              exit 0
+            fi
         language: system
         pass_filenames: false
         verbose: true
