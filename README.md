@@ -69,17 +69,43 @@ Full-featured GQL (Graph Query Language) and Cypher support for the Geode graph 
 
 ### Prerequisites
 
-1. **Geode** must be installed and in your PATH:
+- **VS Code 1.75.0+**
+- **Geode CLI** installed and in your PATH (required for LSP + query execution)
+- **Running Geode server** for query execution and schema features
 
-   ```bash
-   git clone https://gitlab.com/devnw/codepros/geode/geode.git
-   cd geode && make build
-   export PATH="$PWD/zig-out/bin:$PATH"
-   ```
+If you need to build Geode from source:
+
+```bash
+git clone https://gitlab.com/devnw/codepros/geode/geode.git
+cd geode && make build
+export PATH="$PWD/zig-out/bin:$PATH"
+```
 
 ### Install Extension
 
-#### Option 1: Build and Install VSIX (Recommended)
+#### Option 1: VS Code Marketplace (Recommended)
+
+```bash
+# Install via command line
+code --install-extension codeprosorg.geode-vscode
+
+# Or search in VS Code:
+# 1. Open VS Code
+# 2. Press Ctrl+Shift+X (Cmd+Shift+X on macOS)
+# 3. Search for "Geode"
+# 4. Click Install
+```
+
+#### Option 2: Manual Installation from VSIX
+
+```bash
+# Download a VSIX from releases or build one locally, then:
+code --install-extension geode-vscode-<version>.vsix
+
+# Or in VS Code: Extensions → ... → Install from VSIX
+```
+
+#### Option 3: Build and Install VSIX (From Source)
 
 ```bash
 # Install dependencies
@@ -92,15 +118,22 @@ npm run compile
 npm run package
 
 # Install in VS Code
-code --install-extension geode-gql-1.0.0.vsix
+code --install-extension geode-vscode-<version>.vsix
 ```
 
-#### Option 2: Development Mode (F5 Debugging)
+#### Option 4: Development Mode (F5 Debugging)
 
 1. Open this folder in VS Code
 2. Run `npm install`
 3. Press `F5` to launch Extension Development Host
 4. Open a `.gql` file in the new window
+
+#### Option 5: Using Make
+
+```bash
+make install
+make dev
+```
 
 ## Usage
 
