@@ -199,6 +199,9 @@ publish-openvsx:
       fi
       echo "Open VSX PAT retrieved successfully"
 
+      # Ensure publisher namespace exists (idempotent)
+      npx ovsx create-namespace codeprosorg -p "$OVSX_PAT" || true
+
       # Publish to Open VSX Registry
       VSIX_FILE=$(ls *.vsix | head -1)
       npx ovsx publish "$VSIX_FILE" -p "$OVSX_PAT"
