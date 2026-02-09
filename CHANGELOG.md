@@ -111,7 +111,7 @@ New snippets added:
 - `Geode: Execute MCP Tool` - Run an MCP tool interactively
 
 ### Changed
-- **DSN Format**: Always use `geode://` prefix (Geode always uses TLS, no `geodes://` needed)
+- **DSN Format**: Uses `quic://` scheme per the official Geode DSN specification (QUIC transport with TLS 1.3)
 - **Connection Profiles**: Enhanced with additional fields for full compatibility
 - **Package Dependencies**: Removed `@geodedb/client` native dependency to avoid GLIBC issues
 

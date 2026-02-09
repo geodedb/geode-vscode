@@ -30,7 +30,7 @@ allowlist = { regexTarget = "match" }
 id = "example-connection-strings"
 description = "Allow example connection strings in documentation"
 path = '''README\.md'''
-regex = '''geode://[a-zA-Z]+:[a-zA-Z]+@localhost'''
+regex = '''quic://[a-zA-Z]+:[a-zA-Z]+@localhost'''
 allowlist = { regexTarget = "match" }
 
 [[rules]]

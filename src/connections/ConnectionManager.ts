@@ -322,10 +322,10 @@ export class ConnectionManager {
 
     /**
      * Build the DSN string for the connection
-     * Note: Geode always uses TLS, so we always use geode:// prefix
+     * Uses quic:// scheme per the official Geode DSN specification
      */
     buildDsn(profile: ConnectionProfile, password?: string): string {
-        let dsn = 'geode://';
+        let dsn = 'quic://';
 
         if (profile.username) {
             dsn += encodeURIComponent(profile.username);
@@ -347,10 +347,10 @@ export class ConnectionManager {
         // Add query parameters
         const params: string[] = [];
         if (profile.insecure) {
-            params.push('insecure=true');
+            params.push('insecure_tls_skip_verify=true');
         }
         if (profile.timeout !== 5000) {
-            params.push(`timeout=${profile.timeout}`);
+            params.push(`timeout_ms=${profile.timeout}`);
         }
 
         if (params.length > 0) {
