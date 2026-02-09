@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-02-09
+
+### Changed
+- Updated README installation guidance to prefer OS/Docker installs and clarify extension installation options.
+
 ## [1.2.0] - 2026-01-28
 
 ### Changed

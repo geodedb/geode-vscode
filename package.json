@@ -2,7 +2,7 @@
   "name": "geode-vscode",
   "displayName": "Geode for VS Code",
   "description": "Official VS Code extension for Geode graph database - GQL/Cypher syntax highlighting, LSP, query execution, and graph visualization",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "publisher": "codeprosorg",
   "author": "CodePros",
   "icon": "images/geode-icon.png",
