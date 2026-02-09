@@ -147,6 +147,69 @@ publish-marketplace:
       when: on_success
     - when: never
 
+# =============================================================================
+# Publish to Open VSX Registry
+# =============================================================================
+# Retrieves Open VSX PAT from Vault at devnw/geode/openvsx (field: pat)
+# Uses script-based JWT auth matching the ci-catalog vault-auth pattern
+publish-openvsx:
+  stage: publish
+  image: node:20-alpine@sha256:2d5e8a8a51bc341fd5f2eed6d91455c3a3d147e91a14298fc564b5dc519c1666
+  needs:
+    - job: build
+      artifacts: true
+    - job: lint
+    - job: test
+  id_tokens:
+    VAULT_ID_TOKEN:
+      aud: https://pki.devnw.com
+  variables:
+    VAULT_ADDR: https://pki.devnw.com
+    VAULT_AUTH_ROLE: codepros-ci
+    VAULT_MOUNT: devnw
+    VAULT_SECRET_PATH: geode/openvsx
+  before_script:
+    - apk add --no-cache curl jq
+  script:
+    - |
+      set -euo pipefail
+
+      # Authenticate to Vault via JWT
+      echo "Authenticating to Vault at $VAULT_ADDR with role $VAULT_AUTH_ROLE"
+      AUTH_RESPONSE=$(curl -sS --request POST \
+        --data "{\"role\": \"$VAULT_AUTH_ROLE\", \"jwt\": \"$VAULT_ID_TOKEN\"}" \
+        "$VAULT_ADDR/v1/auth/gitlab-jwt/login")
+      VAULT_TOKEN=$(echo "$AUTH_RESPONSE" | jq -r '.auth.client_token')
+
+      if [ -z "$VAULT_TOKEN" ] || [ "$VAULT_TOKEN" = "null" ]; then
+        echo "ERROR: Failed to authenticate to Vault"
+        echo "Response: $AUTH_RESPONSE"
+        exit 1
+      fi
+      echo "Vault authentication successful"
+
+      # Retrieve Open VSX PAT from Vault
+      echo "Retrieving Open VSX PAT from Vault..."
+      OVSX_PAT=$(curl -sS --header "X-Vault-Token: $VAULT_TOKEN" \
+        "$VAULT_ADDR/v1/${VAULT_MOUNT}/data/$VAULT_SECRET_PATH" | jq -r '.data.data.pat // empty')
+
+      if [ -z "$OVSX_PAT" ]; then
+        echo "ERROR: Open VSX PAT not found in Vault at $VAULT_SECRET_PATH (field: pat)"
+        exit 1
+      fi
+      echo "Open VSX PAT retrieved successfully"
+
+      # Publish to Open VSX Registry
+      VSIX_FILE=$(ls *.vsix | head -1)
+      npx ovsx publish "$VSIX_FILE" -p "$OVSX_PAT"
+  environment:
+    name: open-vsx
+    url: https://open-vsx.org/extension/codeprosorg/geode-vscode
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$/'
+      when: on_success
+    - when: never
+
 # Upload .vsix to GitLab Generic Package Registry as backup
 publish-gitlab:
   stage: publish
@@ -172,6 +235,8 @@ publish-gitlab:
 create-release:
   needs:
     - job: publish-marketplace
+      optional: false
+    - job: publish-openvsx
       optional: false
     - job: publish-gitlab
       optional: true
