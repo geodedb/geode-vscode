@@ -190,8 +190,15 @@ publish-openvsx:
 
       # Retrieve Open VSX PAT from Vault
       echo "Retrieving Open VSX PAT from Vault..."
-      OVSX_PAT=$(curl -sS --header "X-Vault-Token: $VAULT_TOKEN" \
-        "$VAULT_ADDR/v1/${VAULT_MOUNT}/data/$VAULT_SECRET_PATH" | jq -r '.data.data.pat // empty')
+      SECRET_RESPONSE=$(curl -sS --header "X-Vault-Token: $VAULT_TOKEN" \
+        "$VAULT_ADDR/v1/${VAULT_MOUNT}/data/$VAULT_SECRET_PATH")
+
+      # Debug: show response structure (keys only, no values)
+      echo "Vault response keys: $(echo "$SECRET_RESPONSE" | jq -r 'keys')"
+      echo "Vault data keys: $(echo "$SECRET_RESPONSE" | jq -r '.data.data | keys // empty' 2>/dev/null)"
+      echo "Vault errors: $(echo "$SECRET_RESPONSE" | jq -r '.errors // empty')"
+
+      OVSX_PAT=$(echo "$SECRET_RESPONSE" | jq -r '.data.data.pat // empty')
 
       if [ -z "$OVSX_PAT" ]; then
         echo "ERROR: Open VSX PAT not found in Vault at $VAULT_SECRET_PATH (field: pat)"
