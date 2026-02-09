@@ -88,13 +88,11 @@ test:
 # =============================================================================
 # Publish to VS Code Marketplace
 # =============================================================================
-# Vault secret path: devnw/geode/vsce (key: pat)
-# Store the VSCE Personal Access Token in Vault at:
-#   vault kv put devnw/geode/vsce pat=<YOUR_VSCE_PAT>
-#
-# The PAT must be created at https://dev.azure.com with:
-#   - Organization: All accessible organizations
-#   - Scopes: Marketplace > Manage
+# Requires CI/CD variable VSCE_PAT (masked, protected) set in project settings:
+#   Settings > CI/CD > Variables > Add variable
+#   Key: VSCE_PAT
+#   Value: <your Azure DevOps PAT with Marketplace Manage scope>
+#   Flags: Protected, Masked
 publish-marketplace:
   stage: publish
   image: node:20-alpine@sha256:2d5e8a8a51bc341fd5f2eed6d91455c3a3d147e91a14298fc564b5dc519c1666
@@ -103,17 +101,6 @@ publish-marketplace:
       artifacts: true
     - job: lint
     - job: test
-  id_tokens:
-    VAULT_ID_TOKEN:
-      aud: https://vault.devnw.com
-  secrets:
-    VSCE_PAT:
-      vault:
-        engine:
-          name: kv-v2
-          path: devnw
-        path: geode/vsce
-        field: pat
   script:
     - npx vsce publish --skip-license -p "$VSCE_PAT"
   environment:

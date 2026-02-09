@@ -18,24 +18,14 @@ paths = [
   '''.*\.log$''',
   '''package-lock\.json$''',
 ]
-
-# Specific allowlist for known false positives
-[[rules]]
-id = "vscode-api-patterns"
-description = "Allow VS Code API references that look like credentials"
-regex = '''vscode\.(SecretStorage|secrets)'''
-allowlist = { regexTarget = "match" }
-
-[[rules]]
-id = "example-connection-strings"
-description = "Allow example connection strings in documentation"
-path = '''README\.md'''
-regex = '''quic://[a-zA-Z]+:[a-zA-Z]+@localhost'''
-allowlist = { regexTarget = "match" }
-
-[[rules]]
-id = "test-credentials"
-description = "Allow test credentials in test files"
-path = '''src/test/.*\.ts$'''
-regex = '''(password|secret).*['"]test|mock|example'''
-allowlist = { regexTarget = "match" }
+regexes = [
+  # VS Code API references that look like credentials
+  '''vscode\.(SecretStorage|secrets)''',
+  # Example connection strings in docs/tests
+  '''quic://[a-zA-Z]+:[a-zA-Z]+@localhost''',
+]
+stopwords = [
+  "test",
+  "mock",
+  "example",
+]
