@@ -2273,17 +2273,12 @@ export async function queryToDot(
         if (username) {
             args.push('-U', username);
         }
-        // SECURITY: Password is passed via environment variable below, not CLI args
+        if (password) {
+            args.push('-P', password);
+        }
         args.push('-');
 
-        // SECURITY: Pass password via environment variable instead of CLI arg
-        // to prevent exposure in process listings (ps aux, /proc/*/cmdline)
-        const spawnEnv: NodeJS.ProcessEnv = { ...process.env };
-        if (password) {
-            spawnEnv['GEODE_PASSWORD'] = password;
-        }
-
-        const proc = cp.spawn(geodeBinary, args, { timeout: 60000, env: spawnEnv });
+        const proc = cp.spawn(geodeBinary, args, { timeout: 60000 });
 
         let stdout = '';
         let stderr = '';
@@ -2330,17 +2325,12 @@ export async function queryToJson(
         if (username) {
             args.push('-U', username);
         }
-        // SECURITY: Password is passed via environment variable below, not CLI args
+        if (password) {
+            args.push('-P', password);
+        }
         args.push('-');
 
-        // SECURITY: Pass password via environment variable instead of CLI arg
-        // to prevent exposure in process listings (ps aux, /proc/*/cmdline)
-        const spawnEnv: NodeJS.ProcessEnv = { ...process.env };
-        if (password) {
-            spawnEnv['GEODE_PASSWORD'] = password;
-        }
-
-        const proc = cp.spawn(geodeBinary, args, { timeout: 60000, env: spawnEnv });
+        const proc = cp.spawn(geodeBinary, args, { timeout: 60000 });
 
         let stdout = '';
         let stderr = '';

@@ -466,24 +466,16 @@ export class GeodeClientWrapper {
 
             if (username && username.length > 0) {
                 args.push('-U', username);
-                // Password is passed via environment variable for security
-                // (not visible in process listings via ps aux)
+            }
+            if (username && password && password.length > 0) {
+                args.push('-P', password);
             }
 
             // Use stdin for query
             args.push('-');
 
-            // Build environment with password if provided
-            // SECURITY: Pass password via environment variable instead of CLI arg
-            // to prevent exposure in process listings (ps aux, /proc/*/cmdline)
-            const spawnEnv: NodeJS.ProcessEnv = { ...process.env };
-            if (username && password && password.length > 0) {
-                spawnEnv['GEODE_PASSWORD'] = password;
-            }
-
             const proc = cp.spawn(this.geodeBinary, args, {
-                timeout: QUERY_TIMEOUT_MS,
-                env: spawnEnv
+                timeout: QUERY_TIMEOUT_MS
             });
 
             let stdout = '';

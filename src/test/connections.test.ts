@@ -158,7 +158,7 @@ describe('Connection Manager Tests', () => {
 
     describe('CLI Argument Building', () => {
         // Simulate the buildConnectionArgs logic for testing
-        function buildConnectionArgs(profile: ConnectionProfile): string[] {
+        function buildConnectionArgs(profile: ConnectionProfile, password?: string): string[] {
             const args: string[] = [];
 
             args.push('--server', `${profile.host}:${profile.port}`);
@@ -175,24 +175,11 @@ describe('Connection Manager Tests', () => {
                 args.push('-U', profile.username);
             }
 
-            return args;
-        }
-
-        /**
-         * Build connection args - password is no longer included in args for security
-         * @deprecated Use buildConnectionArgs() + buildPasswordEnvironment() instead
-         */
-        function buildConnectionArgsWithPassword(profile: ConnectionProfile, _password?: string): string[] {
-            // SECURITY: Password should be passed via GEODE_PASSWORD env var, not CLI args
-            return buildConnectionArgs(profile);
-        }
-
-        function buildPasswordEnvironment(password?: string): Record<string, string | undefined> {
-            const env: Record<string, string | undefined> = { ...process.env };
             if (password) {
-                env['GEODE_PASSWORD'] = password;
+                args.push('-P', password);
             }
-            return env;
+
+            return args;
         }
 
         it('builds basic connection args', () => {
@@ -228,36 +215,25 @@ describe('Connection Manager Tests', () => {
             assert.ok(args.includes('testuser'));
         });
 
-        it('does not include password in args for security', () => {
-            // SECURITY: Passwords should be passed via environment variable,
-            // not CLI arguments (which are visible in process listings)
+        it('includes password via -P flag', () => {
             const profile: ConnectionProfile = {
                 ...createDefaultProfile(),
                 username: 'testuser'
             };
-            const args = buildConnectionArgsWithPassword(profile, 'secret123');
+            const args = buildConnectionArgs(profile, 'secret123');
 
-            // Password should NOT be in args
+            assert.ok(args.includes('-P'));
+            assert.ok(args.includes('secret123'));
+        });
+
+        it('does not include -P when no password provided', () => {
+            const profile: ConnectionProfile = {
+                ...createDefaultProfile(),
+                username: 'testuser'
+            };
+            const args = buildConnectionArgs(profile);
+
             assert.ok(!args.includes('-P'));
-            assert.ok(!args.includes('secret123'));
-        });
-
-        it('includes password in environment variable', () => {
-            const env = buildPasswordEnvironment('secret123');
-            assert.strictEqual(env['GEODE_PASSWORD'], 'secret123');
-        });
-
-        it('does not set GEODE_PASSWORD when password is undefined', () => {
-            const originalEnv = process.env['GEODE_PASSWORD'];
-            delete process.env['GEODE_PASSWORD'];
-
-            const env = buildPasswordEnvironment(undefined);
-            assert.strictEqual(env['GEODE_PASSWORD'], undefined);
-
-            // Restore original
-            if (originalEnv) {
-                process.env['GEODE_PASSWORD'] = originalEnv;
-            }
         });
 
         it('does not include insecure flag when useTls is true and insecure is false', () => {

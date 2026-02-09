@@ -264,12 +264,9 @@ export class ConnectionManager {
      *   --insecure           Skip TLS certificate verification
      *   --timeout secs       Connection timeout in seconds
      *   -U, --user username  Authenticate as user
-     *
-     * SECURITY NOTE: Password should be passed via GEODE_PASSWORD environment
-     * variable (using buildPasswordEnvironment), NOT via command-line arguments,
-     * to prevent exposure in process listings.
+     *   -P password           Authentication password
      */
-    buildConnectionArgs(profile: ConnectionProfile): string[] {
+    buildConnectionArgs(profile: ConnectionProfile, password?: string): string[] {
         const args: string[] = [];
 
         args.push('--server', `${profile.host}:${profile.port}`);
@@ -287,37 +284,20 @@ export class ConnectionManager {
             args.push('-U', profile.username);
         }
 
-        return args;
-    }
-
-    /**
-     * Build environment variables for CLI invocation including password
-     *
-     * SECURITY: Password is passed via GEODE_PASSWORD environment variable
-     * instead of CLI args to prevent exposure in process listings.
-     *
-     * @param password Optional password to include
-     * @returns Environment variables object to pass to spawn/exec
-     */
-    buildPasswordEnvironment(password?: string): Record<string, string | undefined> {
-        const env: Record<string, string | undefined> = { ...process.env };
         if (password) {
-            env['GEODE_PASSWORD'] = password;
+            args.push('-P', password);
         }
-        return env;
+
+        return args;
     }
 
     /**
      * Build connection arguments including password
      *
-     * @deprecated Use buildConnectionArgs() + buildPasswordEnvironment() instead.
-     * Passing password via CLI args exposes it in process listings.
-     * This method now returns args without password for security.
+     * @deprecated Use buildConnectionArgs(profile, password) instead.
      */
-    buildConnectionArgsWithPassword(profile: ConnectionProfile, _password?: string): string[] {
-        // SECURITY: No longer include password in CLI args
-        // Password should be passed via GEODE_PASSWORD environment variable
-        return this.buildConnectionArgs(profile);
+    buildConnectionArgsWithPassword(profile: ConnectionProfile, password?: string): string[] {
+        return this.buildConnectionArgs(profile, password);
     }
 
     /**

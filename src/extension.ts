@@ -1011,8 +1011,8 @@ function runGeodeQueryWithProfile(
         const geodeCmd = resolveGeodeBinary(vscode.workspace.getConfiguration('geode.lsp'));
         const args = ['query', '--format', 'json'];
 
-        // Add connection arguments (without password - password is passed via env var)
-        args.push(...connectionManager.buildConnectionArgsWithPassword(profile));
+        // Add connection arguments including password via -P flag
+        args.push(...connectionManager.buildConnectionArgs(profile, password));
 
         // Use stdin for query to avoid issues with queries starting with '--' (comments)
         // The geode CLI accepts '-' to read query from stdin
@@ -1020,13 +1020,8 @@ function runGeodeQueryWithProfile(
 
         outputChannel.appendLine(`Executing: ${geodeCmd} ${args.join(' ')}`);
 
-        // SECURITY: Pass password via environment variable instead of CLI args
-        // to prevent exposure in process listings (ps aux)
-        const spawnEnv = connectionManager.buildPasswordEnvironment(password);
-
         const childProcess = cp.spawn(geodeCmd, args, {
-            timeout: profile.queryTimeout,
-            env: spawnEnv
+            timeout: profile.queryTimeout
         });
 
         let stdout = '';

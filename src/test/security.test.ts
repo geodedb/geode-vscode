@@ -459,12 +459,13 @@ describe('Security Tests', () => {
          * Instead, they should be passed via environment variables.
          */
 
-        // Helper that mirrors the secure pattern in the codebase
-        function buildSecureCLIArgs(
+        // Helper that mirrors the CLI arg building pattern in the codebase
+        function buildCLIArgs(
             host: string,
             port: number,
             insecure: boolean,
-            username?: string
+            username?: string,
+            password?: string
         ): string[] {
             const args = ['query', '--format', 'json', '--server', `${host}:${port}`];
             if (insecure) {
@@ -473,58 +474,32 @@ describe('Security Tests', () => {
             if (username) {
                 args.push('-U', username);
             }
-            // SECURITY: Password is NOT added to args
+            if (password) {
+                args.push('-P', password);
+            }
             args.push('-');
             return args;
         }
 
-        function buildPasswordEnvironment(password?: string): Record<string, string | undefined> {
-            const env: Record<string, string | undefined> = {};
-            if (password) {
-                env['GEODE_PASSWORD'] = password;
-            }
-            return env;
-        }
+        it('SECURITY: CLI args include -P flag when password provided', () => {
+            const args = buildCLIArgs('localhost', 3141, false, 'admin', 'secret');
 
-        it('SECURITY: CLI args do not contain -P flag', () => {
-            const args = buildSecureCLIArgs('localhost', 3141, false, 'admin');
+            assert.ok(args.includes('-P'), 'CLI args should contain -P flag');
+            assert.ok(args.includes('secret'), 'CLI args should contain password value');
+        });
+
+        it('SECURITY: CLI args do not contain -P when no password', () => {
+            const args = buildCLIArgs('localhost', 3141, false, 'admin');
 
             assert.strictEqual(args.indexOf('-P'), -1,
-                'CLI args should not contain -P flag');
+                'CLI args should not contain -P flag when no password');
         });
 
-        it('SECURITY: password is not visible in CLI args string', () => {
-            const args = buildSecureCLIArgs('localhost', 3141, false, 'admin');
-            const argsString = args.join(' ');
+        it('SECURITY: password is not included when empty string', () => {
+            const args = buildCLIArgs('localhost', 3141, false, 'admin', '');
 
-            // Common passwords that should never appear in CLI args
-            const testPasswords = ['password', 'secret', '12345', 'admin123'];
-            for (const pwd of testPasswords) {
-                assert.ok(!argsString.includes(pwd),
-                    `CLI args should not contain password: ${pwd}`);
-            }
-        });
-
-        it('SECURITY: password is passed via GEODE_PASSWORD env var', () => {
-            const env = buildPasswordEnvironment('mySecretPassword');
-
-            assert.strictEqual(env['GEODE_PASSWORD'], 'mySecretPassword',
-                'Password should be set in GEODE_PASSWORD env var');
-        });
-
-        it('SECURITY: empty password results in no env var', () => {
-            const env = buildPasswordEnvironment(undefined);
-
-            assert.strictEqual(env['GEODE_PASSWORD'], undefined,
-                'No GEODE_PASSWORD when password is undefined');
-        });
-
-        it('SECURITY: empty string password results in no env var', () => {
-            const env = buildPasswordEnvironment('');
-
-            // Empty string is falsy, so it should not set the env var
-            assert.ok(!env['GEODE_PASSWORD'] || env['GEODE_PASSWORD'] === '',
-                'Empty password should not be set or be empty');
+            assert.strictEqual(args.indexOf('-P'), -1,
+                'Empty password should not produce -P flag');
         });
     });
 

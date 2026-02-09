@@ -469,31 +469,22 @@ export class EnhancedConnectionManager {
     /**
      * Build connection args (compatibility method)
      *
-     * @deprecated Use buildConnectionArgs() + buildPasswordEnvironment() instead.
-     * Password is no longer passed via CLI args for security.
+     * @deprecated Use buildConnectionArgs(profile, password) instead.
      */
-    buildConnectionArgsWithPassword(profile: ConnectionProfile, _password?: string): string[] {
-        // SECURITY: Password should be passed via GEODE_PASSWORD environment variable
-        // See buildPasswordEnvironment() for secure password handling
-        return [
-            '--server', `${profile.host}:${profile.port}`,
-            ...(profile.username ? ['--username', profile.username] : []),
-            ...(profile.insecure ? ['--insecure'] : [])
-        ];
+    buildConnectionArgsWithPassword(profile: ConnectionProfile, password?: string): string[] {
+        return this.buildConnectionArgs(profile, password);
     }
 
     /**
-     * Build environment variables for CLI invocation including password
-     *
-     * SECURITY: Password is passed via GEODE_PASSWORD environment variable
-     * instead of CLI args to prevent exposure in process listings.
+     * Build connection arguments for the geode CLI
      */
-    buildPasswordEnvironment(password?: string): Record<string, string | undefined> {
-        const env: Record<string, string | undefined> = { ...process.env };
-        if (password) {
-            env['GEODE_PASSWORD'] = password;
-        }
-        return env;
+    buildConnectionArgs(profile: ConnectionProfile, password?: string): string[] {
+        return [
+            '--server', `${profile.host}:${profile.port}`,
+            ...(profile.username ? ['-U', profile.username] : []),
+            ...(password ? ['-P', password] : []),
+            ...(profile.insecure ? ['--insecure'] : [])
+        ];
     }
 
     /**
