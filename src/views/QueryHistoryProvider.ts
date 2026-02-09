@@ -168,11 +168,25 @@ export class QueryHistoryProvider implements vscode.TreeDataProvider<QueryHistor
     }
 
     private loadHistory(): void {
-        this.history = this.context.globalState.get<QueryHistoryEntry[]>('geode.queryHistory', []);
+        // SECURITY: Issue #32 - Use workspaceState instead of globalState
+        // to prevent sensitive query text from syncing across devices
+        this.history = this.context.workspaceState.get<QueryHistoryEntry[]>('geode.queryHistory', []);
+
+        // MIGRATION: Check if there's data in the old globalState location
+        const oldHistory = this.context.globalState.get<QueryHistoryEntry[]>('geode.queryHistory');
+        if (oldHistory && oldHistory.length > 0 && this.history.length === 0) {
+            // Migrate from globalState to workspaceState
+            this.history = oldHistory;
+            this.saveHistory();
+            // Clear old synced data for security
+            this.context.globalState.update('geode.queryHistory', undefined);
+        }
     }
 
     private saveHistory(): void {
-        this.context.globalState.update('geode.queryHistory', this.history);
+        // SECURITY: Issue #32 - Use workspaceState instead of globalState
+        // to prevent sensitive query text from syncing across devices
+        this.context.workspaceState.update('geode.queryHistory', this.history);
     }
 
     dispose(): void {

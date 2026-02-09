@@ -204,11 +204,25 @@ export class SavedQueriesProvider implements vscode.TreeDataProvider<SavedQueryI
     }
 
     private loadQueries(): void {
-        this.queries = this.context.globalState.get<SavedQuery[]>('geode.savedQueries', []);
+        // SECURITY: Issue #32 - Use workspaceState instead of globalState
+        // to prevent sensitive query text from syncing across devices
+        this.queries = this.context.workspaceState.get<SavedQuery[]>('geode.savedQueries', []);
+
+        // MIGRATION: Check if there's data in the old globalState location
+        const oldQueries = this.context.globalState.get<SavedQuery[]>('geode.savedQueries');
+        if (oldQueries && oldQueries.length > 0 && this.queries.length === 0) {
+            // Migrate from globalState to workspaceState
+            this.queries = oldQueries;
+            this.persistQueries();
+            // Clear old synced data for security
+            this.context.globalState.update('geode.savedQueries', undefined);
+        }
     }
 
     private persistQueries(): void {
-        this.context.globalState.update('geode.savedQueries', this.queries);
+        // SECURITY: Issue #32 - Use workspaceState instead of globalState
+        // to prevent sensitive query text from syncing across devices
+        this.context.workspaceState.update('geode.savedQueries', this.queries);
     }
 
     dispose(): void {

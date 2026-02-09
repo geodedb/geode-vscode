@@ -381,10 +381,33 @@ export class GeodeMCPServer {
     }
 
     /**
+     * SECURITY: Issue #40 - Redact sensitive data from arguments before logging
+     */
+    private redactSensitiveArgs(args: Record<string, any>): Record<string, any> {
+        const redacted = { ...args };
+        const sensitiveKeys = ['password', 'token', 'secret', 'api_key', 'auth'];
+
+        for (const key of Object.keys(redacted)) {
+            // Redact known sensitive keys
+            if (sensitiveKeys.some(sk => key.toLowerCase().includes(sk))) {
+                redacted[key] = '***REDACTED***';
+            }
+            // Redact long query strings (might contain sensitive data)
+            else if (key === 'query' && typeof redacted[key] === 'string' && redacted[key].length > 100) {
+                redacted[key] = redacted[key].substring(0, 100) + '... (truncated)';
+            }
+        }
+
+        return redacted;
+    }
+
+    /**
      * Execute a tool
      */
     async executeTool(name: string, args: Record<string, any>): Promise<MCPToolResult> {
-        this.outputChannel.appendLine(`MCP: Executing tool ${name} with args: ${JSON.stringify(args)}`);
+        // SECURITY: Issue #40 - Log with redacted sensitive arguments
+        const safeArgs = this.redactSensitiveArgs(args);
+        this.outputChannel.appendLine(`MCP: Executing tool ${name} with args: ${JSON.stringify(safeArgs)}`);
 
         try {
             switch (name) {

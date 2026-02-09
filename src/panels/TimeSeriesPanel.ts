@@ -51,7 +51,15 @@ export class TimeSeriesPanel {
 
     public updateChart(config: ChartConfig): void { this.chartConfig = config; this._update(); }
 
-    private _update(): void { this._panel.webview.html = this._getHtmlContent(); }
+    private _update(): void {
+        this._panel.webview.html = this._getHtmlContent();
+        // SECURITY: Use postMessage to send data instead of inlining JSON
+        // This prevents XSS via malicious content in chartConfig (Issue #31)
+        this._panel.webview.postMessage({
+            type: 'updateChart',
+            data: this.chartConfig || this.getExampleConfig()
+        });
+    }
 
     private getNonce(): string {
         let text = '';
@@ -62,7 +70,8 @@ export class TimeSeriesPanel {
 
     private _getHtmlContent(): string {
         const nonce = this.getNonce();
-        const configJson = JSON.stringify(this.chartConfig || this.getExampleConfig());
+        // SECURITY: Data is now passed via postMessage instead of inline JSON
+        // to prevent XSS attacks (Issue #31)
 
         return `<!DOCTYPE html>
 <html lang="en">
@@ -97,11 +106,23 @@ export class TimeSeriesPanel {
         <div class="stats-grid" id="statsGrid"></div>
     </div>
     <script nonce="${nonce}">
-        const config = ${configJson};
+        // SECURITY: Receive data via postMessage instead of inline JSON
+        let config = null;
         const colors = ['#4ecdc4', '#ff6b6b', '#45b7d1', '#96ceb4', '#ffeaa7'];
         const margin = { top: 20, right: 30, bottom: 40, left: 50 };
 
+        window.addEventListener('message', event => {
+            const message = event.data;
+            if (message.type === 'updateChart') {
+                config = message.data;
+                if (config) {
+                    init();
+                }
+            }
+        });
+
         function init() {
+            if (!config) return;
             document.getElementById('chartTitle').textContent = config.title || 'Analytics';
             renderChart();
             renderLegend();
@@ -192,8 +213,9 @@ export class TimeSeriesPanel {
             });
         }
 
-        window.addEventListener('resize', renderChart);
-        init();
+        window.addEventListener('resize', () => {
+            if (config) renderChart();
+        });
     </script>
 </body>
 </html>`;

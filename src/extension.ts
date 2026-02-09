@@ -189,14 +189,20 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('geode.visualizeQuery', visualizeQueryAsGraph)
     );
 
-    // Auto-connect if configured
+    // SECURITY: Issue #33 - Auto-connect with workspace trust check
+    // Setting is restricted to machine scope in package.json
     if (config.get<boolean>('server.autoConnect', false)) {
-        const defaultProfile = connectionManager.getDefaultProfile();
-        if (defaultProfile) {
-            try {
-                await connectionManager.connect(defaultProfile.id);
-            } catch (error) {
-                outputChannel.appendLine(`Auto-connect failed: ${error}`);
+        // Additional defense-in-depth check for workspace trust
+        if (!vscode.workspace.isTrusted) {
+            outputChannel.appendLine('SECURITY: Auto-connect disabled in untrusted workspace');
+        } else {
+            const defaultProfile = connectionManager.getDefaultProfile();
+            if (defaultProfile) {
+                try {
+                    await connectionManager.connect(defaultProfile.id);
+                } catch (error) {
+                    outputChannel.appendLine(`Auto-connect failed: ${error}`);
+                }
             }
         }
     }
@@ -984,6 +990,12 @@ function runGeodeQuery(query: string, host: string, port: number, timeout: numbe
     return new Promise((resolve, reject) => {
         const config = vscode.workspace.getConfiguration('geode');
         const insecure = config.get<boolean>('server.insecure', false);
+
+        // SECURITY: Issue #34 - Warn when insecure TLS is enabled
+        if (insecure) {
+            outputChannel.appendLine('SECURITY WARNING: TLS certificate verification is disabled (insecure mode)');
+        }
+
         const geodeCmd = resolveGeodeBinary(vscode.workspace.getConfiguration('geode.lsp'));
         const args = ['query', '--server', `${host}:${port}`, '--format', 'json'];
 
@@ -991,7 +1003,9 @@ function runGeodeQuery(query: string, host: string, port: number, timeout: numbe
             args.push('--insecure');
         }
 
-        args.push(query);
+        // SECURITY: Issue #35 - Use stdin to prevent CLI option injection
+        // If query starts with '--', it could be interpreted as an option
+        args.push('-');
 
         const process = cp.spawn(geodeCmd, args, {
             timeout: timeout
@@ -1019,6 +1033,12 @@ function runGeodeQuery(query: string, host: string, port: number, timeout: numbe
         process.on('error', (err) => {
             reject(err.message);
         });
+
+        // SECURITY: Issue #35 - Write query to stdin
+        if (process.stdin) {
+            process.stdin.write(query);
+            process.stdin.end();
+        }
     });
 }
 
@@ -1229,22 +1249,26 @@ async function formatDocument() {
 // ============================================================================
 
 function showDocumentation() {
+    // SECURITY: Issue #36 - Disable scripts and add CSP for documentation panel
+    // Documentation is static content and doesn't need JavaScript
     const panel = vscode.window.createWebviewPanel(
         'geodeDocumentation',
         'GQL Documentation',
         vscode.ViewColumn.Two,
-        { enableScripts: true }
+        { enableScripts: false }
     );
 
     panel.webview.html = getDocumentationHtml();
 }
 
 function getDocumentationHtml(): string {
+    // SECURITY: Issue #36 - Add strict CSP for documentation panel
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src https: data:;">
     <title>GQL Documentation</title>
     <style>
         body { font-family: var(--vscode-font-family); padding: 20px; }

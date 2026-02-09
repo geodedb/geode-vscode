@@ -1,6 +1,7 @@
-// CANARY: REQ=REQ-VSCODE-SCHEMA-EXPLORER-001; FEATURE="SchemaExplorerTreeView"; ASPECT=VSCodeIntegration; STATUS=IMPL; OWNER=tooling; UPDATED=2026-01-03
+// CANARY: REQ=REQ-VSCODE-SCHEMA-EXPLORER-001; FEATURE="SchemaExplorerTreeView"; ASPECT=VSCodeIntegration; STATUS=IMPL; OWNER=tooling; UPDATED=2026-01-30
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
+import * as path from 'path';
 
 /**
  * Schema Explorer Tree View Provider
@@ -84,14 +85,70 @@ export class SchemaExplorerProvider implements vscode.TreeDataProvider<SchemaTre
         this.loadConfiguration();
     }
 
+    /**
+     * SECURITY: Validate binary path to prevent malicious workspace attacks
+     * Mirrors validation from GeodeClientWrapper for consistency
+     */
+    private isValidBinaryPath(binaryPath: string): boolean {
+        // Normalize path separators for consistent checking across platforms
+        const normalizedPath = binaryPath.replace(/\\/g, '/');
+
+        const suspiciousPatterns = [
+            /[;&|`$]/, // Shell metacharacters
+            /\.\.\//, // Path traversal (normalized to forward slash)
+        ];
+
+        // Check for shell metacharacters and path traversal first
+        for (const pattern of suspiciousPatterns) {
+            if (pattern.test(normalizedPath)) {
+                return false;
+            }
+        }
+
+        // Extract basename from normalized path for cross-platform compatibility
+        const parts = normalizedPath.split('/');
+        const basename = parts[parts.length - 1].toLowerCase();
+
+        // Reject direct shell execution attempts
+        const shellExecutables = ['sh', 'bash', 'zsh', 'cmd', 'cmd.exe', 'powershell', 'powershell.exe'];
+        if (shellExecutables.includes(basename)) {
+            return false;
+        }
+
+        const validNames = ['geode', 'geode.exe', 'geode.sh', 'geode.bat'];
+        if (validNames.includes(basename)) {
+            return true;
+        }
+
+        // Reject non-geode script extensions
+        if (/\.(sh|bat|cmd|ps1)$/i.test(basename)) {
+            return false;
+        }
+
+        return true;
+    }
+
     private loadConfiguration(): void {
         const config = vscode.workspace.getConfiguration('geode');
         this.serverHost = config.get<string>('server.host', 'localhost');
         this.serverPort = config.get<number>('server.port', 3141);
         this.isInsecure = config.get<boolean>('server.insecure', false);
 
+        // SECURITY: Issue #34 - Warn when insecure TLS is enabled
+        if (this.isInsecure) {
+            console.warn('SECURITY WARNING: TLS certificate verification is disabled (insecure mode) in Schema Explorer');
+        }
+
         const lspConfig = vscode.workspace.getConfiguration('geode.lsp');
-        this.geodeCommand = lspConfig.get<string>('path', 'geode');
+        const configured = lspConfig.get<string>('path', 'geode');
+
+        // SECURITY: Validate the configured path before using it
+        if (configured && !this.isValidBinaryPath(configured)) {
+            console.warn(`SECURITY: Rejected suspicious binary path in schema explorer: ${configured}`);
+            this.geodeCommand = 'geode'; // Fall back to PATH lookup
+        } else {
+            this.geodeCommand = configured;
+        }
     }
 
     refresh(): void {

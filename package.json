@@ -657,12 +657,14 @@
         "geode.server.autoConnect": {
           "type": "boolean",
           "default": false,
-          "description": "Automatically connect to the server on startup"
+          "scope": "machine",
+          "description": "Automatically connect to the server on startup. SECURITY: This setting is restricted to machine scope to prevent malicious workspace attacks."
         },
         "geode.server.insecure": {
           "type": "boolean",
           "default": false,
-          "description": "Skip TLS certificate verification (use for development/self-signed certs)"
+          "scope": "machine",
+          "description": "Skip TLS certificate verification (use ONLY for development/self-signed certs). SECURITY WARNING: This setting disables TLS security and is restricted to machine scope. Do not use in production."
         },
         "geode.query.timeout": {
           "type": "number",
@@ -746,7 +748,7 @@
     "@vscode/vsce": "^2.22.0",
     "eslint": "^9.39.2",
     "glob": "^13.0.0",
-    "mocha": "^11.7.5",
+    "mocha": "^11.3.0",
     "typescript": "^5.0.0"
   }
 }

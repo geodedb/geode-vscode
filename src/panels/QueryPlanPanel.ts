@@ -73,6 +73,12 @@ export class QueryPlanPanel {
 
     private _update(): void {
         this._panel.webview.html = this._getHtmlContent();
+        // SECURITY: Use postMessage to send data instead of inlining JSON
+        // This prevents XSS via malicious content in planData
+        this._panel.webview.postMessage({
+            type: 'updatePlan',
+            data: this.planData || this.getExamplePlan()
+        });
     }
 
     private getNonce(): string {
@@ -86,7 +92,8 @@ export class QueryPlanPanel {
 
     private _getHtmlContent(): string {
         const nonce = this.getNonce();
-        const planJson = JSON.stringify(this.planData || this.getExamplePlan());
+        // SECURITY: Data is now passed via postMessage instead of inline JSON
+        // to prevent XSS attacks (Issue #31)
 
         return `<!DOCTYPE html>
 <html lang="en">
@@ -113,7 +120,24 @@ export class QueryPlanPanel {
     <div class="header"><h1>Query Execution Plan</h1></div>
     <div id="planContainer"></div>
     <script nonce="${nonce}">
-        const planData = ${planJson};
+        // SECURITY: Receive data via postMessage instead of inline JSON
+        let planData = null;
+
+        window.addEventListener('message', event => {
+            const message = event.data;
+            if (message.type === 'updatePlan') {
+                planData = message.data;
+                const container = document.getElementById('planContainer');
+                // SECURITY: Clear container safely without using risky DOM methods
+                while (container.firstChild) {
+                    container.removeChild(container.firstChild);
+                }
+                if (planData) {
+                    render(planData, container, getMax(planData));
+                }
+            }
+        });
+
         function render(node, container, totalRows) {
             if (!node) { container.textContent = 'No plan data'; return; }
             const nodeEl = document.createElement('div');
@@ -141,8 +165,6 @@ export class QueryPlanPanel {
             }
         }
         function getMax(node) { return Math.max(node.estimatedRows || 0, ...(node.children || []).map(getMax)); }
-        const container = document.getElementById('planContainer');
-        render(planData, container, getMax(planData));
     </script>
 </body>
 </html>`;
