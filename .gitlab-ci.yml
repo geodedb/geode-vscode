@@ -128,11 +128,18 @@ publish-marketplace:
 
       # Retrieve VSCE PAT from Vault
       echo "Retrieving VSCE PAT from Vault..."
-      VSCE_PAT=$(curl -sS --header "X-Vault-Token: $VAULT_TOKEN" \
-        "$VAULT_ADDR/v1/${VAULT_MOUNT}/data/$VAULT_SECRET_PATH" | jq -r '.data.data.pat // empty')
+      SECRET_RESPONSE=$(curl -sS --header "X-Vault-Token: $VAULT_TOKEN" \
+        "$VAULT_ADDR/v1/${VAULT_MOUNT}/data/$VAULT_SECRET_PATH")
+
+      # Debug: show available fields (keys only, no values)
+      echo "Available fields at $VAULT_SECRET_PATH:"
+      echo "$SECRET_RESPONSE" | jq -r '.data.data // {} | keys[]' 2>/dev/null || echo "(none or error)"
+
+      VSCE_PAT=$(echo "$SECRET_RESPONSE" | jq -r '.data.data.pat // empty')
 
       if [ -z "$VSCE_PAT" ]; then
         echo "ERROR: VSCE PAT not found in Vault at $VAULT_SECRET_PATH (field: pat)"
+        echo "Check the field name matches one of the available fields above"
         exit 1
       fi
       echo "VSCE PAT retrieved successfully"
