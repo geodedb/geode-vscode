@@ -131,9 +131,10 @@ publish-marketplace:
       SECRET_RESPONSE=$(curl -sS --header "X-Vault-Token: $VAULT_TOKEN" \
         "$VAULT_ADDR/v1/${VAULT_MOUNT}/data/$VAULT_SECRET_PATH")
 
-      # Debug: show available fields (keys only, no values)
-      echo "Available fields at $VAULT_SECRET_PATH:"
-      echo "$SECRET_RESPONSE" | jq -r '.data.data // {} | keys[]' 2>/dev/null || echo "(none or error)"
+      # Debug: show response structure (no secret values)
+      echo "Response structure at ${VAULT_MOUNT}/data/$VAULT_SECRET_PATH:"
+      echo "$SECRET_RESPONSE" | jq '{errors: .errors, warnings: .warnings, has_data: (.data != null), data_keys: (.data.data // {} | keys)}' 2>/dev/null || echo "jq parse failed - raw response snippet:"
+      echo "$SECRET_RESPONSE" | head -c 200 2>/dev/null || true
 
       VSCE_PAT=$(echo "$SECRET_RESPONSE" | jq -r '.data.data.pat // empty')
 
