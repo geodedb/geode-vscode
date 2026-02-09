@@ -2,30 +2,30 @@
 # This prevents supply chain attacks via malicious updates
 include:
   # Security scanning
-  - component: gitlab.com/devnw/ci-catalog/security-sast@1.0.0
+  - component: gitlab.com/devnw/ci-catalog/security-sast@v1.9.15
     inputs:
       stage: security
 
-  - component: gitlab.com/devnw/ci-catalog/security-dependency-scanning@1.0.0
+  - component: gitlab.com/devnw/ci-catalog/security-dependency-scanning@v1.9.15
     inputs:
       stage: security
 
-  - component: gitlab.com/devnw/ci-catalog/security-secrets@1.0.0
+  - component: gitlab.com/devnw/ci-catalog/security-secrets@v1.9.15
     inputs:
       stage: security
 
-  - component: gitlab.com/devnw/ci-catalog/security-gitleaks@1.0.0
+  - component: gitlab.com/devnw/ci-catalog/security-gitleaks@v1.9.15
 
   # SBOM generation and scanning
-  - component: gitlab.com/devnw/ci-catalog/sbom-generate@1.0.0
+  - component: gitlab.com/devnw/ci-catalog/sbom-generate@v1.9.15
 
   # SECURITY: Issue #38 - Make SBOM scan blocking to enforce security policy
-  - component: gitlab.com/devnw/ci-catalog/sbom-scan@1.0.0
+  - component: gitlab.com/devnw/ci-catalog/sbom-scan@v1.9.15
     inputs:
       allow_failure: false
 
   # Release creation
-  - component: gitlab.com/devnw/ci-catalog/release-semantic@1.0.0
+  - component: gitlab.com/devnw/ci-catalog/release-semantic@v1.9.15
     inputs:
       stage: release
 
@@ -39,6 +39,7 @@ stages:
   - test
   - security
   - sbom
+  - publish
   - release
 
 # SECURITY: Issue #37 - Use image digests for reproducible builds
@@ -81,3 +82,75 @@ test:
     - npm run test
   rules:
     - if: '$CI_COMMIT_BRANCH'
+
+# =============================================================================
+# Publish to VS Code Marketplace
+# =============================================================================
+# Vault secret path: devnw/geode/vsce (key: pat)
+# Store the VSCE Personal Access Token in Vault at:
+#   vault kv put devnw/geode/vsce pat=<YOUR_VSCE_PAT>
+#
+# The PAT must be created at https://dev.azure.com with:
+#   - Organization: All accessible organizations
+#   - Scopes: Marketplace > Manage
+publish-marketplace:
+  stage: publish
+  image: node:20-alpine@sha256:2d5e8a8a51bc341fd5f2eed6d91455c3a3d147e91a14298fc564b5dc519c1666
+  needs:
+    - job: build
+      artifacts: true
+    - job: lint
+    - job: test
+  id_tokens:
+    VAULT_ID_TOKEN:
+      aud: https://vault.devnw.com
+  secrets:
+    VSCE_PAT:
+      vault:
+        engine:
+          name: kv-v2
+          path: devnw
+        path: geode/vsce
+        field: pat
+  script:
+    - npx vsce publish --skip-license -p "$VSCE_PAT"
+  environment:
+    name: vscode-marketplace
+    url: https://marketplace.visualstudio.com/items?itemName=codeprosorg.geode-vscode
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$/'
+      when: on_success
+    - when: never
+
+# Upload .vsix to GitLab Generic Package Registry as backup
+publish-gitlab:
+  stage: publish
+  image: curlimages/curl:latest
+  needs:
+    - job: build
+      artifacts: true
+    - job: lint
+    - job: test
+  script:
+    - |
+      VSIX_FILE=$(ls *.vsix | head -1)
+      echo "Uploading ${VSIX_FILE} to GitLab Package Registry..."
+      curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+           --upload-file "${VSIX_FILE}" \
+           "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/geode-vscode/${CI_COMMIT_TAG}/${VSIX_FILE}"
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$/'
+      when: on_success
+    - when: never
+
+# Release must wait for publish to complete
+create-release:
+  needs:
+    - job: publish-marketplace
+      optional: false
+    - job: publish-gitlab
+      optional: true
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$/'
+      when: on_success
+    - when: never
