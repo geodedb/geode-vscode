@@ -1,6 +1,7 @@
 # Build output
 out/
 *.vsix
+coverage/
 
 # Dependencies
 node_modules/
