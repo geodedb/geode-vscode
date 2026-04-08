@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { secureId } from '../utils/security';
 
 /**
  * Connection profile for Geode database
@@ -344,7 +345,7 @@ export class ConnectionManager {
      * Generate a unique ID for a new connection
      */
     generateId(): string {
-        return `conn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        return secureId('conn');
     }
 
     private async loadConnections(): Promise<void> {

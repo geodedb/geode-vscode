@@ -15,7 +15,7 @@
 
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
-import { sanitizeIdentifier, escapeStringValue, getNonce } from '../utils/security';
+import { sanitizeIdentifier, escapeStringValue, getNonce, secureRandomFloat } from '../utils/security';
 
 /**
  * Validate and sanitize a numeric value with bounds.
@@ -1413,7 +1413,7 @@ export class GraphVisualizationPanel {
                     const focusNode = cy.getElementById(focusNodeId);
                     if (focusNode.length) {
                         const pos = focusNode.position();
-                        const angle = Math.random() * Math.PI * 2;
+                        const angle = secureRandomFloat() * Math.PI * 2;
                         const radius = 100;
 
                         newNodeCollection.forEach((node, i) => {

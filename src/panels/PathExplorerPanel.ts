@@ -1,7 +1,7 @@
 // CANARY: REQ=REQ-VSCODE-PATHS-001; FEATURE="PathExplorerPanel"; ASPECT=Implementation; STATUS=IMPL; OWNER=vscode; UPDATED=2026-01-03
 import * as vscode from 'vscode';
 import { BaseWebviewPanel, getWebviewOptions, WebviewPanelOptions } from './BaseWebviewPanel';
-import { sanitizeIdentifier, escapeStringValue, escapeHtml } from '../utils/security';
+import { sanitizeIdentifier, escapeStringValue, escapeHtml, secureRandomInt, secureRandomFloat } from '../utils/security';
 
 const MAX_DEPTH = 20;
 
@@ -263,13 +263,13 @@ export class PathExplorerPanel extends BaseWebviewPanel {
         const results: PathResult[] = [];
 
         for (let i = 0; i < count; i++) {
-            const pathLength = Math.min(params.maxDepth, Math.floor(Math.random() * 4) + 2);
+            const pathLength = Math.min(params.maxDepth, secureRandomInt(4) + 2);
             const nodes: PathNode[] = [];
             const relationships: PathRelationship[] = [];
 
             for (let j = 0; j <= pathLength; j++) {
                 nodes.push({
-                    id: Math.floor(Math.random() * 10000),
+                    id: secureRandomInt(10000),
                     labels: ['Node', `Type${j % 3}`],
                     properties: { name: `Node_${j}`, created: new Date().toISOString() }
                 });
@@ -279,9 +279,9 @@ export class PathExplorerPanel extends BaseWebviewPanel {
                         ? params.relationshipTypes
                         : ['CONNECTED', 'KNOWS', 'FOLLOWS'];
                     relationships.push({
-                        id: Math.floor(Math.random() * 10000),
-                        type: relTypes[Math.floor(Math.random() * relTypes.length)],
-                        properties: { weight: Math.random() }
+                        id: secureRandomInt(10000),
+                        type: relTypes[secureRandomInt(relTypes.length)],
+                        properties: { weight: secureRandomFloat() }
                     });
                 }
             }
@@ -290,7 +290,7 @@ export class PathExplorerPanel extends BaseWebviewPanel {
                 nodes,
                 relationships,
                 length: pathLength,
-                cost: params.pathType === 'weighted' ? Math.random() * 10 : undefined,
+                cost: params.pathType === 'weighted' ? secureRandomFloat() * 10 : undefined,
                 expanded: false
             });
         }

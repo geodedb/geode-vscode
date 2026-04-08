@@ -1,6 +1,6 @@
 // CANARY: REQ=REQ-VSCODE-TIMESERIES-001; FEATURE="TimeSeriesCharting"; ASPECT=VSCodeIntegration; STATUS=IMPL; OWNER=tooling; UPDATED=2026-01-03
 import * as vscode from 'vscode';
-import { getNonce } from '../utils/security';
+import { getNonce, secureRandomFloat } from '../utils/security';
 
 /**
  * Time Series and Analytics Charting Panel
@@ -220,8 +220,8 @@ export class TimeSeriesPanel {
         return {
             title: 'Query Performance Over Time', type: 'line', xLabel: 'Date', yLabel: 'Response Time (ms)',
             series: [
-                { name: 'Latency', data: Array.from({ length: 30 }, (_, i) => ({ timestamp: now - (29 - i) * dayMs, value: 50 + Math.random() * 30 })) },
-                { name: 'Throughput', data: Array.from({ length: 30 }, (_, i) => ({ timestamp: now - (29 - i) * dayMs, value: 100 + Math.random() * 50 })) }
+                { name: 'Latency', data: Array.from({ length: 30 }, (_, i) => ({ timestamp: now - (29 - i) * dayMs, value: 50 + secureRandomFloat() * 30 })) },
+                { name: 'Throughput', data: Array.from({ length: 30 }, (_, i) => ({ timestamp: now - (29 - i) * dayMs, value: 100 + secureRandomFloat() * 50 })) }
             ]
         };
     }

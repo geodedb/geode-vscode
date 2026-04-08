@@ -3,6 +3,7 @@
  */
 
 import * as vscode from 'vscode';
+import { secureId } from '../utils/security';
 
 export interface QueryHistoryEntry {
     id: string;
@@ -103,7 +104,7 @@ export class QueryHistoryProvider implements vscode.TreeDataProvider<QueryHistor
     addEntry(entry: Omit<QueryHistoryEntry, 'id' | 'timestamp'>): void {
         const fullEntry: QueryHistoryEntry = {
             ...entry,
-            id: `query-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            id: secureId('query'),
             timestamp: Date.now()
         };
 

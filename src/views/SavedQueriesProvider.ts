@@ -3,6 +3,7 @@
  */
 
 import * as vscode from 'vscode';
+import { secureId } from '../utils/security';
 
 export interface SavedQuery {
     id: string;
@@ -112,7 +113,7 @@ export class SavedQueriesProvider implements vscode.TreeDataProvider<SavedQueryI
 
         // Create new
         const newQuery: SavedQuery = {
-            id: `saved-${now}-${Math.random().toString(36).substr(2, 9)}`,
+            id: secureId('saved'),
             name: query.name,
             query: query.query,
             description: query.description,

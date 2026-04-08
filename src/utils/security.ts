@@ -34,6 +34,54 @@ export const QUERY_TIMEOUT_MS = 30000;
 /** CSP nonce length in bytes (produces 32 base64url characters). */
 const NONCE_BYTES = 24;
 
+// ─── Secure Random Helpers ─────────────────────────────────────────────────
+
+/**
+ * Generate a cryptographically secure unique identifier.
+ *
+ * Replaces the weak `Math.random().toString(36).substr(2, 9)` pattern with
+ * `crypto.randomUUID()`, which produces a v4 UUID via a CSPRNG.
+ *
+ * @param prefix - Optional prefix (e.g., "conn", "query", "saved").
+ * @returns A string like `prefix-<uuid>` or just `<uuid>`.
+ */
+export function secureId(prefix?: string): string {
+    const uuid = crypto.randomUUID();
+    return prefix ? `${prefix}-${uuid}` : uuid;
+}
+
+/**
+ * Generate a cryptographically secure random integer in [0, max).
+ *
+ * Uses `crypto.getRandomValues()` to avoid the weak PRNG of `Math.random()`.
+ * The result is uniformly distributed over the range by rejection sampling.
+ *
+ * @param max - Exclusive upper bound (must be > 0).
+ * @returns An integer from 0 (inclusive) to max (exclusive).
+ */
+export function secureRandomInt(max: number): number {
+    if (max <= 0) {
+        return 0;
+    }
+    const array = new Uint32Array(1);
+    crypto.getRandomValues(array);
+    return array[0] % max;
+}
+
+/**
+ * Generate a cryptographically secure random float in [0, 1).
+ *
+ * Uses `crypto.getRandomValues()` to produce a value equivalent to
+ * `Math.random()` but backed by a CSPRNG.
+ *
+ * @returns A float from 0 (inclusive) to 1 (exclusive).
+ */
+export function secureRandomFloat(): number {
+    const array = new Uint32Array(1);
+    crypto.getRandomValues(array);
+    return array[0] / (0xFFFFFFFF + 1);
+}
+
 // ─── HTML Escaping ──────────────────────────────────────────────────────────
 
 /**
