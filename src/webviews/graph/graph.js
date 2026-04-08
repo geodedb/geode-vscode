@@ -3,6 +3,13 @@
  * Lightweight Canvas-based graph renderer with force-directed layout
  */
 
+/** Return a cryptographically secure random float in [0, 1). */
+function secureFloat() {
+    const arr = new Uint32Array(1);
+    crypto.getRandomValues(arr);
+    return arr[0] / (0xFFFFFFFF + 1);
+}
+
 // Graph state
 let nodes = [];
 let edges = [];
@@ -81,8 +88,8 @@ function initGraph() {
 function processGraphData(data) {
     nodes = data.nodes.map(n => ({
         ...n,
-        x: n.x || Math.random() * 500 + 100,
-        y: n.y || Math.random() * 400 + 100,
+        x: n.x || secureFloat() * 500 + 100,
+        y: n.y || secureFloat() * 400 + 100,
         vx: 0,
         vy: 0,
         radius: 20

@@ -5,7 +5,7 @@
 import * as vscode from 'vscode';
 import { GeodeClientWrapper, ConnectionStatus, GeodeConfig } from './GeodeClientWrapper';
 import { warnIfInsecure } from '../connections/ConnectionManager';
-import { DEFAULT_PORT, CONNECTION_TIMEOUT_MS, QUERY_TIMEOUT_MS } from '../utils/security';
+import { DEFAULT_PORT, CONNECTION_TIMEOUT_MS, QUERY_TIMEOUT_MS, secureId } from '../utils/security';
 
 /**
  * Safely merge object properties while preventing prototype pollution.
@@ -463,7 +463,7 @@ export class EnhancedConnectionManager {
      * Generate unique ID (compatibility with old API - made public)
      */
     generateId(): string {
-        return `profile-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        return secureId('profile');
     }
 
     /**
