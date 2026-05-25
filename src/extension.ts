@@ -133,6 +133,10 @@ export async function activate(context: vscode.ExtensionContext) {
         serverClient = new HttpServerClient(startedServerInfo);
     }
 
+    // Provide the bundled server info to the client wrapper so it can issue
+    // HTTP queries instead of spawning a CLI subprocess.
+    connectionManager.getClient().attachServerInfoProvider(() => serverInfo);
+
     // Register sidebar webview provider
     sidebarProvider = new ReactWebviewViewProvider({
         extensionRoot: context.extensionUri.fsPath,
