@@ -65,52 +65,17 @@ Full-featured GQL (Graph Query Language) and Cypher support for the Geode graph 
 - **8 MCP Tools**: Query, schema, counts, paths, explain, create nodes/relationships
 - **AI-Assisted**: Let AI assistants interact with your database
 
+## Prerequisites
+
+None. The VSIX bundles the geode-ui server and the geode graph-DB
+binary; the extension boots them on activation. The host system does
+not need the geode CLI installed.
+
+If you need to point at an external geode server, configure the
+host/port through the Geode sidebar UI. The bundled binaries continue
+to run alongside; they provide LSP and the management UI.
+
 ## Installation
-
-### Prerequisites
-
-- **VS Code 1.75.0+**
-- **Geode CLI** installed and in your PATH (required for LSP + query execution)
-- **Running Geode server** for query execution and schema features
-
-Recommended Geode install methods (OS packages or Docker):
-
-### Option A: Install by OS (recommended)
-
-Linux (Debian/Ubuntu):
-
-```bash
-curl -fsSL https://apt.geodedb.com/geode.gpg | \
-  sudo gpg --dearmor -o /usr/share/keyrings/geode-archive-keyring.gpg
-echo "deb [signed-by=/usr/share/keyrings/geode-archive-keyring.gpg] https://apt.geodedb.com stable main" | \
-  sudo tee /etc/apt/sources.list.d/geode.list
-sudo apt update
-sudo apt install geode
-```
-
-macOS (Homebrew):
-
-```bash
-brew tap geodedb/geode
-brew install geode
-```
-
-Windows: use WSL2, then follow the Linux steps above inside WSL.
-
-### Option B: Docker (fastest server setup)
-
-```bash
-docker run -d \
-  -p 3141:3141 \
-  -v geode-data:/var/lib/geode \
-  --name geode \
-  geodedb/geode:latest serve --listen 0.0.0.0:3141
-```
-
-Note: Even when running the server in Docker, the extension still needs the Geode CLI locally for the language server. Install the CLI via OS packages as shown above.
-
-If you need to build Geode from source (advanced/dev only), follow the
-[Geode build-from-source guide](https://geodedb.com/docs/installation/from-source/).
 
 ### Install Extension
 
@@ -298,11 +263,9 @@ Settings in VS Code (`Ctrl+,`):
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `geode.lsp.enabled` | `true` | Enable language server |
-| `geode.lsp.path` | `"geode"` | Path to geode executable |
-| `geode.server.host` | `"localhost"` | Database server host |
-| `geode.server.port` | `3141` | Database server port |
-| `geode.server.autoConnect` | `false` | Auto-connect on startup |
-| `geode.server.insecure` | `false` | Skip TLS verification |
+| `geode.lsp.trace.server` | `"off"` | LSP trace level (off/messages/verbose) |
+| `geode.bundledServer.startupTimeoutMs` | `10000` | Startup timeout for bundled server (ms) |
+| `geode.bundledServer.logLevel` | `"info"` | Log level for bundled server |
 | `geode.query.timeout` | `30000` | Query timeout (ms) |
 | `geode.query.maxResults` | `1000` | Max results to display |
 | `geode.format.keywordCase` | `"upper"` | Keyword case |
@@ -312,15 +275,15 @@ Settings in VS Code (`Ctrl+,`):
 
 ### LSP Not Starting
 
-1. Check geode is installed:
+1. Check Output panel: View -> Output -> "Geode GQL" for bundled server logs.
 
-   ```bash
-   geode lsp --help
+2. Increase startup timeout if the bundled server is slow to initialise:
+
+   ```json
+   "geode.bundledServer.startupTimeoutMs": 20000
    ```
 
-2. Check Output panel: View -> Output -> "Geode GQL"
-
-3. Verify extension settings for `geode.lsp.path`
+3. Set `geode.bundledServer.logLevel` to `"debug"` for verbose output.
 
 ### No Syntax Highlighting
 
@@ -330,17 +293,15 @@ Settings in VS Code (`Ctrl+,`):
 
 ### Query Execution Fails
 
-1. Ensure Geode server is running: `geode serve`
-2. Check server connection settings
-3. Add a connection profile via the Connections view
-4. Check Output panel for detailed error messages
+1. Check Output panel for detailed error messages.
+2. Add or verify a connection profile via the Geode sidebar.
+3. Use `Geode: Restart Language Server` to reset the LSP.
 
 ### Connection Issues
 
-1. Verify server is running and accessible
-2. Check host and port settings
-3. For TLS issues, try enabling `geode.server.insecure` temporarily
-4. Check firewall settings
+1. Verify any external server is running and accessible.
+2. Configure host and port through the Geode sidebar UI.
+3. Check firewall settings.
 
 ## Bundled Components
 

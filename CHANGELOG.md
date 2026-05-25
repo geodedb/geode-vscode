@@ -5,14 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.3.0] - 2026-05-25
 
 ### Added
+
 - Foundation for embedded geode-ui management UI: extension now bundles the
   geode-ui SPA and the geode-ui Go server binary. A new `geode.showSpaShell`
   command opens the SPA inside a webview panel. (sub-plan 1)
+- Settings: `geode.bundledServer.startupTimeoutMs`,
+  `geode.bundledServer.logLevel`.
+- `src/server/GeodeLspProcess.ts` spawns the bundled graph-DB binary
+  for LSP upstream.
+- `src/lsp/wsTransport.ts` adapts WebSocket to the LanguageClient
+  StreamInfo contract.
 
 ### Changed
+
 - Build now requires `npm run prepackage` before `vsce package`. The
   prepackage step copies SPA assets from `../geode-ui` (local mode) or
   downloads them from the GitLab registry (CI mode).
@@ -31,8 +39,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   performance metrics, path explorer) now open as React webview panels
   backed by geode-ui SPA routes. Native panel implementations are
   removed. (sub-plan 5)
+- LSP runs over WebSocket against the bundled geode-ui server. The
+  host system no longer needs the `geode` binary on PATH or in any
+  configured location. (sub-plan 6)
 
 ### Removed
+
 - src/connections/ConnectionsTreeProvider.ts - superseded by the sidebar
   webview.
 - src/panels/ResultsTablePanel.ts
@@ -51,6 +63,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - src/panels/BaseWebviewPanel.ts
 - src/webviews/graph/, src/webviews/metrics/, src/webviews/paths/, src/webviews/shared/
 - In-extension extractGraphData / extractGraphElements helpers (logic moved to src/bridge/handlers/graphOps.ts)
+- Settings: `geode.lsp.path`, `geode.lsp.args`, `geode.server.host`,
+  `geode.server.port`, `geode.server.autoConnect`, `geode.server.insecure`.
+- Helpers: `resolveGeodeBinary`, `findInPath`, `isBinaryPathTrusted`,
+  `runGeodeQuery`, `runGeodeQueryWithProfile`, `connectServer`,
+  `disconnectServer`.
 
 ## [1.2.3] - 2026-02-09
 
