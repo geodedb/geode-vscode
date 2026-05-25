@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Build now requires `npm run prepackage` before `vsce package`. The
   prepackage step copies SPA assets from `../geode-ui` (local mode) or
   downloads them from the GitLab registry (CI mode).
+- Connections are now managed through the geode-ui sidebar webview. The
+  native geodeConnections tree view is removed. All geode.connections.*
+  commands focus the sidebar and dispatch navigation events into the
+  React UI. (sub-plan 2)
+
+### Removed
+- src/connections/ConnectionsTreeProvider.ts - superseded by the sidebar
+  webview.
 
 ## [1.2.3] - 2026-02-09
 
