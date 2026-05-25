@@ -36,6 +36,10 @@
                 err.code = msg.error && msg.error.code
                 entry.reject(err)
             }
+        } else if (msg.kind === 'event') {
+            var detail = { op: msg.op, payload: msg.payload }
+            window.dispatchEvent(new CustomEvent('geode:bridge-event', { detail: detail }))
+            return
         }
     })
 

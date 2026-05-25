@@ -208,6 +208,47 @@ export async function activate(context: vscode.ExtensionContext) {
         startLanguageServer(context);
     }
 
+    // Register connection commands — focus the sidebar and broadcast nav events
+    const focusSidebar = async () => {
+        await vscode.commands.executeCommand('workbench.view.extension.geode-explorer');
+        await vscode.commands.executeCommand('geodeSidebar.focus');
+    };
+
+    const navigate = (to: string) => {
+        sidebarProvider?.broadcast({ kind: 'event', op: 'ui.navigate', payload: { to } });
+    };
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('geode.connections.add', async () => {
+            await focusSidebar();
+            navigate('/sidebar/connections/new');
+        }),
+        vscode.commands.registerCommand('geode.connections.edit', async (item?: { id: string }) => {
+            await focusSidebar();
+            navigate(`/sidebar/connections/${item?.id ?? ''}/edit`);
+        }),
+        vscode.commands.registerCommand('geode.connections.delete', async (item?: { id: string }) => {
+            await focusSidebar();
+            navigate(`/sidebar/connections/${item?.id ?? ''}/delete`);
+        }),
+        vscode.commands.registerCommand('geode.connections.connect', async (item?: { id: string }) => {
+            if (item?.id) await connectionManager.connect(item.id);
+            else await focusSidebar();
+        }),
+        vscode.commands.registerCommand('geode.connections.disconnect', () => connectionManager.disconnect()),
+        vscode.commands.registerCommand('geode.connections.setDefault', async (item?: { id: string }) => {
+            if (item?.id) await connectionManager.setDefaultProfile(item.id);
+        }),
+        vscode.commands.registerCommand('geode.connections.copyDsn', async (item?: { id: string }) => {
+            if (!item?.id) return;
+            const p = connectionManager.getProfile(item.id);
+            if (p) await vscode.env.clipboard.writeText(connectionManager.buildDsn(p));
+        }),
+        vscode.commands.registerCommand('geode.connections.refresh', async () => {
+            sidebarProvider?.broadcast({ kind: 'event', op: 'connections.changed', payload: {} });
+        }),
+    );
+
     // Register commands
     context.subscriptions.push(
         vscode.commands.registerCommand('geode.runQuery', runQuery),
