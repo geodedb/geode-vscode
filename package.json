@@ -749,7 +749,7 @@
     "fetch:ui": "node scripts/fetch-geode-ui.mjs",
     "fetch:ui:local": "node scripts/fetch-geode-ui.mjs --source=local --path=../geode-ui",
     "fetch:bin:local": "node scripts/fetch-geode-binaries.mjs --source=local",
-    "prepackage": "npm run fetch:ui:local && npm run fetch:bin:local && npm run compile"
+    "prepackage": "npm run fetch:ui:local && npm run fetch:bin:local && node scripts/collect-bundled-licenses.mjs && npm run compile"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"

@@ -32,3 +32,6 @@ data/server.key
 !/resources/bin/.gitkeep
 /resources/webview/**
 !/resources/webview/.gitkeep
+
+# Build artifacts
+/resources/THIRD_PARTY_LICENSES.txt
