@@ -385,6 +385,12 @@
         "title": "Visualize Query as Graph",
         "category": "Geode",
         "icon": "$(graph)"
+      },
+      {
+        "command": "geode.showSpaShell",
+        "title": "Show Geode UI (SPA Shell)",
+        "category": "Geode",
+        "icon": "$(window)"
       }
     ],
     "menus": {

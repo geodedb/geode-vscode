@@ -45,8 +45,14 @@ import {
 } from './views/SavedQueriesProvider';
 import { GeodeMCPServer, registerMCPServer } from './mcp/GeodeMCPServer';
 import { isValidBinaryPath, DEFAULT_PORT, CONNECTION_TIMEOUT_MS, QUERY_TIMEOUT_MS } from './utils/security';
+import { GeodeServerProcess } from './server/GeodeServerProcess';
+import { openReactWebviewPanel } from './webview/ReactWebviewPanel';
+import { createHttpForwardHandler } from './bridge/handlers/httpForward';
+import { healthPingHandler } from './bridge/handlers/health';
 
 let client: LanguageClient | undefined;
+let serverProcess: GeodeServerProcess | undefined;
+let serverInfo: { host: string; port: number; token: string } | undefined;
 let statusBarItem: vscode.StatusBarItem;
 let outputChannel: vscode.OutputChannel;
 let connectionManager: EnhancedConnectionManager; // Using new manager
@@ -60,6 +66,17 @@ let extensionContext: vscode.ExtensionContext; // Store context for panel access
 
 const gqlExtensions = new Set(['.gql', '.gcypher', '.pgql']);
 const cypherExtensions = new Set(['.cypher']);
+
+async function ensureServerStarted(context: vscode.ExtensionContext): Promise<{ host: string; port: number; token: string }> {
+    if (serverInfo) return serverInfo;
+    serverProcess = new GeodeServerProcess({
+        extensionRoot: context.extensionUri.fsPath,
+        onLog: (line) => outputChannel.appendLine(`[geode-ui] ${line}`),
+    });
+    const info = await serverProcess.start();
+    serverInfo = { host: info.host, port: info.port, token: '' };
+    return serverInfo;
+}
 
 export async function activate(context: vscode.ExtensionContext) {
     extensionContext = context; // Store for later use
@@ -187,6 +204,22 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('geode.visualizeQuery', visualizeQueryAsGraph)
     );
 
+    context.subscriptions.push(
+        vscode.commands.registerCommand('geode.showSpaShell', async () => {
+            const info = await ensureServerStarted(context);
+            openReactWebviewPanel({
+                extensionRoot: context.extensionUri.fsPath,
+                route: '/dashboard',
+                title: 'Geode',
+                serverInfo: info,
+                register: (host) => {
+                    host.register('http.request', createHttpForwardHandler({ serverInfo: info }));
+                    host.register('health.ping', healthPingHandler({ serverInfo: info }));
+                },
+            });
+        })
+    );
+
     // SECURITY: Issue #33 - Auto-connect with workspace trust check
     // Setting is restricted to machine scope in package.json
     if (config.get<boolean>('server.autoConnect', false)) {
@@ -215,6 +248,7 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate(): Thenable<void> | undefined {
+    serverProcess?.stop();
     if (!client) {
         return undefined;
     }
