@@ -27,7 +27,7 @@ import { migrateLegacySavedQueries } from './sidebar/savedQueriesMigration';
 
 // New enhanced components
 import { EnhancedConnectionManager } from './client/EnhancedConnectionManager';
-import { GeodeMCPServer, registerMCPServer } from './mcp/GeodeMCPServer';
+import { registerMCPServer } from './mcp/GeodeMCPServer';
 import { secureId } from './utils/security';
 import { GeodeServerProcess } from './server/GeodeServerProcess';
 import { GeodeLspProcess } from './server/GeodeLspProcess';
@@ -48,7 +48,6 @@ let outputChannel: vscode.OutputChannel;
 let connectionManager: EnhancedConnectionManager; // Using new manager
 let sidebarProvider: ReactWebviewViewProvider | undefined;
 let serverClient: HttpServerClient | undefined;
-let _mcpServer: GeodeMCPServer; // MCP server for AI integration
 let isConnected = false;
 let extensionContext: vscode.ExtensionContext; // Store context for panel access
 let queryRunner: HttpQueryRunner | undefined;
@@ -82,8 +81,10 @@ export async function activate(context: vscode.ExtensionContext) {
 
     outputChannel.appendLine('Enhanced connection manager initialized');
 
-    // Initialize MCP server for AI assistant integration
-    _mcpServer = registerMCPServer(context, connectionManager.getClient(), outputChannel);
+    // Initialize MCP server for AI assistant integration. The server is
+    // owned by context.subscriptions via the registerMCPServer side-effect;
+    // the return value is discarded because nothing in this module reads it.
+    registerMCPServer(context, connectionManager.getClient(), outputChannel);
     outputChannel.appendLine('MCP server registered');
 
     // Listen to connection changes
