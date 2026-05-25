@@ -38,18 +38,9 @@ import { migrateLegacySavedQueries } from './sidebar/savedQueriesMigration';
 
 // New enhanced components
 import { EnhancedConnectionManager } from './client/EnhancedConnectionManager';
-import {
-    EnhancedSchemaExplorerProvider,
-    registerSchemaExplorerCommands
-} from './views/EnhancedSchemaExplorerProvider';
-import {
-    QueryHistoryProvider,
-    registerQueryHistoryCommands
-} from './views/QueryHistoryProvider';
-import {
-    SavedQueriesProvider,
-    registerSavedQueriesCommands
-} from './views/SavedQueriesProvider';
+import { EnhancedSchemaExplorerProvider } from './views/EnhancedSchemaExplorerProvider';
+import { QueryHistoryProvider } from './views/QueryHistoryProvider';
+import { SavedQueriesProvider } from './views/SavedQueriesProvider';
 import { GeodeMCPServer, registerMCPServer } from './mcp/GeodeMCPServer';
 import { isValidBinaryPath, DEFAULT_PORT, CONNECTION_TIMEOUT_MS, QUERY_TIMEOUT_MS, secureId } from './utils/security';
 import { GeodeServerProcess } from './server/GeodeServerProcess';
@@ -116,9 +107,6 @@ export async function activate(context: vscode.ExtensionContext) {
     });
     context.subscriptions.push(schemaTreeView);
 
-    // Register schema explorer commands
-    registerSchemaExplorerCommands(context, schemaExplorer, connectionManager.getClient());
-
     outputChannel.appendLine('Enhanced schema explorer registered');
 
     // Initialize query history provider
@@ -128,7 +116,6 @@ export async function activate(context: vscode.ExtensionContext) {
         showCollapseAll: false
     });
     context.subscriptions.push(historyTreeView);
-    registerQueryHistoryCommands(context, queryHistoryProvider);
     outputChannel.appendLine('Query history provider registered');
 
     // Initialize saved queries provider
@@ -138,7 +125,6 @@ export async function activate(context: vscode.ExtensionContext) {
         showCollapseAll: true
     });
     context.subscriptions.push(savedQueriesTreeView);
-    registerSavedQueriesCommands(context, savedQueriesProvider);
     outputChannel.appendLine('Saved queries provider registered');
 
     // Initialize MCP server for AI assistant integration
@@ -291,6 +277,76 @@ export async function activate(context: vscode.ExtensionContext) {
         }),
         vscode.commands.registerCommand('geode.connections.refresh', async () => {
             sidebarProvider?.broadcast({ kind: 'event', op: 'connections.changed', payload: {} });
+        }),
+    );
+
+    // Register schema / history / saved-queries commands (re-routed to sidebar webview)
+    const focus = async () => vscode.commands.executeCommand('workbench.view.extension.geode-explorer');
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('geode.refreshSchema', async () => {
+            await focus(); navigate('/sidebar/schema?refresh=1');
+        }),
+        vscode.commands.registerCommand('geode.history.clear', async () => {
+            await focus(); navigate('/sidebar/history?clear=1');
+        }),
+        vscode.commands.registerCommand('geode.history.refresh', async () => {
+            await focus(); navigate('/sidebar/history');
+        }),
+        vscode.commands.registerCommand('geode.history.rerunQuery', async (item?: { query: string }) => {
+            if (item?.query) {
+                const editor = vscode.window.activeTextEditor;
+                if (editor) await editor.edit((b) => b.insert(editor.selection.active, item.query));
+            }
+        }),
+        vscode.commands.registerCommand('geode.history.copyQuery', async (item?: { query: string }) => {
+            if (item?.query) await vscode.env.clipboard.writeText(item.query);
+        }),
+        vscode.commands.registerCommand('geode.history.insertQuery', async (item?: { query: string }) => {
+            const editor = vscode.window.activeTextEditor;
+            if (editor && item?.query) await editor.edit((b) => b.insert(editor.selection.active, item.query));
+        }),
+        vscode.commands.registerCommand('geode.history.removeEntry', async (item?: { id: string }) => {
+            if (item?.id) await serverClient?.request(`/api/v1/history/${encodeURIComponent(item.id)}`, 'DELETE');
+            navigate('/sidebar/history');
+        }),
+        vscode.commands.registerCommand('geode.savedQueries.save', async () => {
+            await focus(); navigate('/sidebar/saved/new');
+        }),
+        vscode.commands.registerCommand('geode.savedQueries.refresh', async () => {
+            await focus(); navigate('/sidebar/saved');
+        }),
+        vscode.commands.registerCommand('geode.savedQueries.open', async (item?: { id: string }) => {
+            await focus(); navigate(`/sidebar/saved/${item?.id ?? ''}`);
+        }),
+        vscode.commands.registerCommand('geode.savedQueries.edit', async (item?: { id: string }) => {
+            await focus(); navigate(`/sidebar/saved/${item?.id ?? ''}/edit`);
+        }),
+        vscode.commands.registerCommand('geode.savedQueries.delete', async (item?: { id: string }) => {
+            if (item?.id) await serverClient?.request(`/api/v1/saved/${encodeURIComponent(item.id)}`, 'DELETE');
+            navigate('/sidebar/saved');
+        }),
+        vscode.commands.registerCommand('geode.savedQueries.run', async (item?: { id: string; query: string }) => {
+            if (item?.query) await executeQuery(item.query);
+        }),
+        vscode.commands.registerCommand('geode.savedQueries.copy', async (item?: { query: string }) => {
+            if (item?.query) await vscode.env.clipboard.writeText(item.query);
+        }),
+        vscode.commands.registerCommand('geode.savedQueries.exportAll', async () => {
+            const data = await serverClient?.request('/api/v1/saved/export', 'GET');
+            const uri = await vscode.window.showSaveDialog({ filters: { JSON: ['json'] }, defaultUri: vscode.Uri.file('geode-saved-queries.json') });
+            if (uri) {
+                const fsp = await import('fs/promises');
+                await fsp.writeFile(uri.fsPath, JSON.stringify(data, null, 2));
+            }
+        }),
+        vscode.commands.registerCommand('geode.savedQueries.importAll', async () => {
+            const uris = await vscode.window.showOpenDialog({ filters: { JSON: ['json'] }, canSelectMany: false });
+            if (!uris || uris.length === 0) return;
+            const fsp = await import('fs/promises');
+            const text = await fsp.readFile(uris[0].fsPath, 'utf8');
+            await serverClient?.request('/api/v1/saved/bulk', 'POST', text);
+            navigate('/sidebar/saved');
         }),
     );
 
