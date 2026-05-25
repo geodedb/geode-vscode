@@ -23,12 +23,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Query execution now routes through the bundled geode-ui server and
   surfaces results in a React webview panel. The native ResultsTablePanel
   is removed. (sub-plan 3)
+- Schema explorer, query history, and saved queries now live in the
+  geode-ui sidebar webview. Tree views removed. Persistence migrated
+  from workspaceState/globalState to the bundled server's REST API.
+  (sub-plan 4)
 
 ### Removed
 - src/connections/ConnectionsTreeProvider.ts - superseded by the sidebar
   webview.
 - src/panels/ResultsTablePanel.ts
 - src/webviews/table/*
+- src/views/EnhancedSchemaExplorerProvider.ts
+- src/views/SchemaExplorerProvider.ts
+- src/views/QueryHistoryProvider.ts
+- src/views/SavedQueriesProvider.ts
+- geodeSchemaExplorer, geodeQueryHistory, geodeSavedQueries view declarations
 
 ## [1.2.3] - 2026-02-09
 
