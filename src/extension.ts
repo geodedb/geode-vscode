@@ -1,12 +1,9 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as cp from 'child_process';
-import * as fs from 'fs';
 import {
     LanguageClient,
     LanguageClientOptions,
     ServerOptions,
-    TransportKind,
     ErrorAction,
     CloseAction
 } from 'vscode-languageclient/node';
@@ -31,8 +28,10 @@ import { migrateLegacySavedQueries } from './sidebar/savedQueriesMigration';
 // New enhanced components
 import { EnhancedConnectionManager } from './client/EnhancedConnectionManager';
 import { GeodeMCPServer, registerMCPServer } from './mcp/GeodeMCPServer';
-import { isValidBinaryPath, DEFAULT_PORT, CONNECTION_TIMEOUT_MS, QUERY_TIMEOUT_MS, secureId } from './utils/security';
+import { secureId } from './utils/security';
 import { GeodeServerProcess } from './server/GeodeServerProcess';
+import { GeodeLspProcess } from './server/GeodeLspProcess';
+import { createLspStream } from './lsp/wsTransport';
 import { openReactWebviewPanel } from './webview/ReactWebviewPanel';
 import { createHttpForwardHandler } from './bridge/handlers/httpForward';
 import { healthPingHandler } from './bridge/handlers/health';
@@ -42,6 +41,7 @@ import { openResultsPanel, pushResults } from './panels/openResultsPanel';
 
 let client: LanguageClient | undefined;
 let serverProcess: GeodeServerProcess | undefined;
+let lspProcess: GeodeLspProcess | undefined;
 let serverInfo: { host: string; port: number; token: string } | undefined;
 let statusBarItem: vscode.StatusBarItem;
 let outputChannel: vscode.OutputChannel;
@@ -302,8 +302,6 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('geode.runQuery', runQuery),
         vscode.commands.registerCommand('geode.runSelection', runSelection),
         vscode.commands.registerCommand('geode.formatDocument', formatDocument),
-        vscode.commands.registerCommand('geode.connectServer', connectServer),
-        vscode.commands.registerCommand('geode.disconnectServer', disconnectServer),
         vscode.commands.registerCommand('geode.showDocumentation', showDocumentation),
         vscode.commands.registerCommand('geode.explainQuery', explainQuery),
         vscode.commands.registerCommand('geode.restartLsp', () => restartLanguageServer(context)),
@@ -407,29 +405,12 @@ export async function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // SECURITY: Issue #33 - Auto-connect with workspace trust check
-    // Setting is restricted to machine scope in package.json
-    if (config.get<boolean>('server.autoConnect', false)) {
-        // Additional defense-in-depth check for workspace trust
-        if (!vscode.workspace.isTrusted) {
-            outputChannel.appendLine('SECURITY: Auto-connect disabled in untrusted workspace');
-        } else {
-            const defaultProfile = connectionManager.getDefaultProfile();
-            if (defaultProfile) {
-                try {
-                    await connectionManager.connect(defaultProfile.id);
-                } catch (error) {
-                    outputChannel.appendLine(`Auto-connect failed: ${error}`);
-                }
-            }
-        }
-    }
-
     outputChannel.appendLine('Geode GQL extension activated successfully');
 }
 
 export function deactivate(): Thenable<void> | undefined {
     serverProcess?.stop();
+    lspProcess?.stop();
     if (!client) {
         return undefined;
     }
@@ -466,226 +447,85 @@ function ensureGeodeLanguageMode(doc: vscode.TextDocument) {
 // Language Server
 // ============================================================================
 
-/**
- * SECURITY: Check if a binary path is from a trusted source.
- * Paths from user's machine settings or PATH are trusted.
- * Paths from workspace folders require workspace trust.
- */
-function isBinaryPathTrusted(binaryPath: string): boolean {
-    // If workspace is trusted, all paths are trusted
-    if (vscode.workspace.isTrusted) {
-        return true;
+async function startLanguageServer(context: vscode.ExtensionContext): Promise<void> {
+    // Boot the bundled graph-DB binary in LSP mode.
+    const bundledCfg = vscode.workspace.getConfiguration('geode.bundledServer')
+    const startupTimeoutMs = bundledCfg.get<number>('startupTimeoutMs', 10_000)
+
+    lspProcess = new GeodeLspProcess({
+        extensionRoot: context.extensionUri.fsPath,
+        startupTimeoutMs,
+        onLog: (line) => outputChannel.appendLine(`[geode-db] ${line}`),
+    })
+    let lspInfo
+    try {
+        lspInfo = await lspProcess.start()
+    } catch (err) {
+        outputChannel.appendLine(`LSP startup failed: ${err instanceof Error ? err.message : String(err)}`)
+        return
     }
+    outputChannel.appendLine(`Geode graph-DB LSP listening on 127.0.0.1:${lspInfo.port}`)
 
-    // Check if path is within workspace folders
-    const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
-    for (const folder of workspaceFolders) {
-        if (binaryPath.startsWith(folder.uri.fsPath)) {
-            // Path is within an untrusted workspace - not trusted
-            return false;
-        }
+    // Restart the geode-ui server with --lsp-upstream now that we know
+    // the port. If it is already running without LSP wiring, stop it.
+    if (serverProcess) {
+        serverProcess.stop()
+        serverProcess = undefined
+        serverInfo = undefined
     }
+    serverProcess = new GeodeServerProcess({
+        extensionRoot: context.extensionUri.fsPath,
+        startupTimeoutMs,
+        onLog: (line) => outputChannel.appendLine(`[geode-ui] ${line}`),
+        lspUpstream: `127.0.0.1:${lspInfo.port}`,
+    })
+    // TODO: wire geode.bundledServer.logLevel to server args when supported
+    let info
+    try {
+        info = await serverProcess.start()
+    } catch (err) {
+        outputChannel.appendLine(`Server restart for LSP failed: ${err instanceof Error ? err.message : String(err)}`)
+        return
+    }
+    serverInfo = { host: info.host, port: info.port, token: '' }
 
-    // Path is not in workspace (e.g., absolute system path or PATH lookup) - trusted
-    return true;
-}
-
-/**
- * Core LSP server startup logic.
- * SECURITY: Only call this after validating the binary path.
- */
-function startLanguageServerWithPath(
-    context: vscode.ExtensionContext,
-    serverPath: string,
-    serverArgs: string[]
-): void {
-    // Server options
-    const serverOptions: ServerOptions = {
-        command: serverPath,
-        args: serverArgs,
-        transport: TransportKind.stdio
-    };
-
-    // Get formatting configuration
-    const formatConfig = vscode.workspace.getConfiguration('geode.format');
-
-    // Client options
+    // Connect the LanguageClient to ws://<host>:<port>/ws/lsp.
+    const url = `ws://${info.host}:${info.port}/ws/lsp`
+    const serverOptions: ServerOptions = () => createLspStream({ url })
     const clientOptions: LanguageClientOptions = {
         documentSelector: [
             { scheme: 'file', language: 'gql' },
             { scheme: 'file', language: 'cypher' },
             { scheme: 'untitled', language: 'gql' },
-            { scheme: 'untitled', language: 'cypher' }
+            { scheme: 'untitled', language: 'cypher' },
         ],
         synchronize: {
-            fileEvents: vscode.workspace.createFileSystemWatcher('**/*.{gql,gcypher,cypher,pgql}')
+            fileEvents: vscode.workspace.createFileSystemWatcher('**/*.{gql,gcypher,cypher,pgql}'),
         },
-        outputChannel: outputChannel,
+        outputChannel,
         traceOutputChannel: outputChannel,
         diagnosticCollectionName: 'geode-gql',
-        initializationOptions: {
-            format: {
-                foldPropertyMaps: formatConfig.get<boolean>('foldPropertyMaps', true),
-                indentSize: formatConfig.get<number>('indentSize', 4),
-                maxLineLength: formatConfig.get<number>('maxLineLength', 80),
-                minPropertiesToFold: formatConfig.get<number>('minPropertiesToFold', 2)
-            }
-        },
-        initializationFailedHandler: (error) => {
-            outputChannel.appendLine(`LSP initialization failed: ${error}`);
-            return false;
+        initializationFailedHandler: (e) => {
+            outputChannel.appendLine(`LSP init failed: ${e}`)
+            return false
         },
         errorHandler: {
-            error: (error, message, count) => {
-                outputChannel.appendLine(`LSP error: ${error} - ${message} (count: ${count})`);
-                return { action: ErrorAction.Continue };
+            error: (e, m, count) => {
+                outputChannel.appendLine(`LSP error: ${e} - ${m} (count: ${count})`)
+                return { action: ErrorAction.Continue }
             },
             closed: () => {
-                outputChannel.appendLine('LSP connection closed');
-                return { action: CloseAction.DoNotRestart };
-            }
-        }
-    };
-
-    outputChannel.appendLine(`Starting LSP server: ${serverPath} ${serverArgs.join(' ')}`);
-
-    // Create and start client
-    client = new LanguageClient(
-        'geode-gql',
-        'Geode GQL Language Server',
-        serverOptions,
-        clientOptions
-    );
-
-    // Set up trace logging for diagnostics
+                outputChannel.appendLine('LSP closed')
+                return { action: CloseAction.DoNotRestart }
+            },
+        },
+    }
+    client = new LanguageClient('geode-gql', 'Geode GQL Language Server', serverOptions, clientOptions)
     client.onDidChangeState((event) => {
-        outputChannel.appendLine(`LSP state changed: ${event.oldState} -> ${event.newState}`);
-    });
-
-    client.start().then(() => {
-        outputChannel.appendLine('Language server started successfully');
-        updateStatusBar('lsp-ready');
-    }).catch((error) => {
-        outputChannel.appendLine(`Failed to start language server: ${error}`);
-        outputChannel.appendLine(`Server path was: ${serverPath}`);
-        vscode.window.showWarningMessage(
-            'Geode LSP failed to start. Make sure "geode" is in your PATH.',
-            'Show Output'
-        ).then(choice => {
-            if (choice === 'Show Output') {
-                outputChannel.show();
-            }
-        });
-    });
-}
-
-async function startLanguageServer(context: vscode.ExtensionContext) {
-    const config = vscode.workspace.getConfiguration('geode.lsp');
-    const serverPath = resolveGeodeBinary(config);
-    const serverArgs = config.get<string[]>('args', ['lsp']);
-
-    // SECURITY: Validate binary path
-    if (!isValidBinaryPath(serverPath)) {
-        outputChannel.appendLine(`SECURITY: Rejected suspicious binary path: ${serverPath}`);
-        vscode.window.showErrorMessage(
-            `Geode: Rejected suspicious binary path "${serverPath}". Only legitimate geode binaries are allowed.`
-        );
-        return;
-    }
-
-    // SECURITY: Check workspace trust for workspace-relative binaries
-    if (!isBinaryPathTrusted(serverPath)) {
-        outputChannel.appendLine(`SECURITY: Binary path "${serverPath}" is from untrusted workspace`);
-        const choice = await vscode.window.showWarningMessage(
-            `Geode: The binary "${path.basename(serverPath)}" is from an untrusted workspace. ` +
-            `Running binaries from untrusted sources can be dangerous. ` +
-            `You can trust this workspace via File > Preferences > Manage Workspace Trust.`,
-            { modal: true },
-            'Use System Binary Instead',
-            'Cancel'
-        );
-
-        if (choice === 'Use System Binary Instead') {
-            // Fall back to PATH lookup
-            const pathBinary = findInPath('geode');
-            if (pathBinary) {
-                outputChannel.appendLine(`Falling back to system binary: ${pathBinary}`);
-                startLanguageServerWithPath(context, pathBinary, serverArgs);
-                return;
-            } else {
-                vscode.window.showErrorMessage('Geode binary not found in PATH. Install geode or trust this workspace.');
-                return;
-            }
-        } else {
-            // User cancelled or clicked Cancel
-            outputChannel.appendLine('User cancelled LSP start due to untrusted workspace');
-            return;
-        }
-    }
-
-    // Path is trusted, start the server
-    startLanguageServerWithPath(context, serverPath, serverArgs);
-}
-
-function resolveGeodeBinary(config: vscode.WorkspaceConfiguration): string {
-    const configured = config.get<string>('path', 'geode');
-    const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
-
-    const candidates: string[] = [];
-    const addCandidate = (candidate?: string) => {
-        if (candidate && !candidates.includes(candidate)) {
-            candidates.push(candidate);
-        }
-    };
-
-    if (configured) {
-        if (path.isAbsolute(configured)) {
-            addCandidate(configured);
-        } else {
-            addCandidate(configured); // rely on PATH or workspace-relative lookup
-            for (const folder of workspaceFolders) {
-                addCandidate(path.join(folder.uri.fsPath, configured));
-            }
-        }
-    }
-
-    for (const folder of workspaceFolders) {
-        addCandidate(path.join(folder.uri.fsPath, 'zig-out', 'bin', 'geode'));
-        addCandidate(path.join(folder.uri.fsPath, 'dist', 'bin', 'geode'));
-    }
-
-    for (const candidate of candidates) {
-        if (fs.existsSync(candidate)) {
-            outputChannel.appendLine(`Using Geode binary at ${candidate}`);
-            return candidate;
-        }
-    }
-
-    const pathBinary = findInPath(configured || 'geode');
-    if (pathBinary) {
-        outputChannel.appendLine(`Using Geode binary from PATH at ${pathBinary}`);
-        return pathBinary;
-    }
-
-    outputChannel.appendLine(`Geode binary not found at configured path (${configured}); falling back to ${configured || 'geode'} and relying on PATH.`);
-    return configured || 'geode';
-}
-
-function findInPath(binary: string): string | undefined {
-    const searchTargets = process.platform === 'win32' && !binary.endsWith('.exe')
-        ? [binary, `${binary}.exe`]
-        : [binary];
-
-    const parts = (process.env.PATH || '').split(path.delimiter);
-    for (const dir of parts) {
-        for (const target of searchTargets) {
-            const candidate = path.join(dir, target);
-            if (fs.existsSync(candidate)) {
-                return candidate;
-            }
-        }
-    }
-    return undefined;
+        outputChannel.appendLine(`LSP state: ${event.oldState} -> ${event.newState}`)
+    })
+    await client.start()
+    updateStatusBar('lsp-ready')
 }
 
 async function restartLanguageServer(context: vscode.ExtensionContext) {
@@ -988,125 +828,6 @@ async function executeQuery(statement: string): Promise<void> {
     }
 }
 
-function runGeodeQuery(query: string, host: string, port: number, timeout: number): Promise<string> {
-    return new Promise((resolve, reject) => {
-        const config = vscode.workspace.getConfiguration('geode');
-        const insecure = config.get<boolean>('server.insecure', false);
-
-        // SECURITY: Issue #34 - Warn when insecure TLS is enabled
-        if (insecure) {
-            outputChannel.appendLine('SECURITY WARNING: TLS certificate verification is disabled (insecure mode)');
-        }
-
-        const geodeCmd = resolveGeodeBinary(vscode.workspace.getConfiguration('geode.lsp'));
-        const args = ['query', '--server', `${host}:${port}`, '--format', 'json'];
-
-        if (insecure) {
-            args.push('--insecure');
-        }
-
-        // SECURITY: Issue #35 - Use stdin to prevent CLI option injection
-        // If query starts with '--', it could be interpreted as an option
-        args.push('-');
-
-        const process = cp.spawn(geodeCmd, args, {
-            timeout: timeout
-        });
-
-        let stdout = '';
-        let stderr = '';
-
-        process.stdout.on('data', (data) => {
-            stdout += data.toString();
-        });
-
-        process.stderr.on('data', (data) => {
-            stderr += data.toString();
-        });
-
-        process.on('close', (code) => {
-            if (code === 0) {
-                resolve(stdout);
-            } else {
-                reject(stderr || `Process exited with code ${code}`);
-            }
-        });
-
-        process.on('error', (err) => {
-            reject(err.message);
-        });
-
-        // SECURITY: Issue #35 - Write query to stdin
-        if (process.stdin) {
-            process.stdin.write(query);
-            process.stdin.end();
-        }
-    });
-}
-
-/**
- * Run a query using a connection profile
- */
-function runGeodeQueryWithProfile(
-    query: string,
-    profile: ConnectionProfile,
-    password?: string
-): Promise<string> {
-    return new Promise((resolve, reject) => {
-        const geodeCmd = resolveGeodeBinary(vscode.workspace.getConfiguration('geode.lsp'));
-        const args = ['query', '--format', 'json'];
-
-        // Add connection arguments including password via -P flag
-        args.push(...connectionManager.buildConnectionArgs(profile, password));
-
-        // Use stdin for query to avoid issues with queries starting with '--' (comments)
-        // The geode CLI accepts '-' to read query from stdin
-        args.push('-');
-
-        outputChannel.appendLine(`Executing: ${geodeCmd} ${args.join(' ')}`);
-
-        const childProcess = cp.spawn(geodeCmd, args, {
-            timeout: profile.queryTimeout
-        });
-
-        let stdout = '';
-        let stderr = '';
-
-        childProcess.stdout.on('data', (data) => {
-            stdout += data.toString();
-        });
-
-        childProcess.stderr.on('data', (data) => {
-            stderr += data.toString();
-        });
-
-        childProcess.on('close', (code) => {
-            // Log stderr for debugging (contains debug output from CLI)
-            if (stderr) {
-                outputChannel.appendLine(`CLI stderr: ${stderr}`);
-            }
-
-            if (code === 0) {
-                resolve(stdout);
-            } else {
-                // Extract error message from stderr, filtering debug lines
-                const errorLines = stderr.split('\n')
-                    .filter(line => !line.startsWith('debug('))
-                    .join('\n').trim();
-                reject(errorLines || `Process exited with code ${code}`);
-            }
-        });
-
-        childProcess.on('error', (err) => {
-            reject(err.message);
-        });
-
-        // Write query to stdin and close it
-        childProcess.stdin.write(query);
-        childProcess.stdin.end();
-    });
-}
-
 /**
  * Handle connecting to a Geode server
  */
@@ -1130,76 +851,26 @@ async function handleConnect(profile: ConnectionProfile, _password?: string): Pr
     }
 }
 
-/**
- * Handle disconnecting from the current server
- */
-async function handleDisconnect(): Promise<void> {
-    await connectionManager.disconnect();
-    isConnected = false;
-    updateStatusBar('disconnected');
-    vscode.commands.executeCommand('setContext', 'geode.hasActiveConnection', false);
-    vscode.window.showInformationMessage('Disconnected from Geode server');
-}
-
 async function explainQuery() {
-    const editor = vscode.window.activeTextEditor;
+    const editor = vscode.window.activeTextEditor
     if (!editor) {
-        vscode.window.showWarningMessage('No active editor');
-        return;
+        vscode.window.showWarningMessage('No active editor')
+        return
     }
-
-    const selection = editor.selection;
-    const query = selection.isEmpty
-        ? editor.document.getText()
-        : editor.document.getText(selection);
-
-    const config = vscode.workspace.getConfiguration('geode');
-    const host = config.get<string>('server.host', 'localhost');
-    const port = config.get<number>('server.port', DEFAULT_PORT);
-
-    outputChannel.appendLine(`\n--- Query Plan ---`);
-    outputChannel.appendLine(query);
-    outputChannel.appendLine('---');
-
+    const stmt = editor.selection.isEmpty ? editor.document.getText() : editor.document.getText(editor.selection)
+    if (!queryRunner) {
+        vscode.window.showWarningMessage('Geode runner not ready yet.')
+        return
+    }
     try {
-        const result = await runGeodeQuery(`EXPLAIN ${query}`, host, port, QUERY_TIMEOUT_MS);
-        outputChannel.appendLine(result);
-        outputChannel.show();
-    } catch (error) {
-        outputChannel.appendLine(`Error: ${error}`);
-        vscode.window.showErrorMessage(`EXPLAIN failed: ${error}`);
+        const result = await queryRunner.run(`EXPLAIN ${stmt}`)
+        outputChannel.appendLine(JSON.stringify(result.rows, null, 2))
+        outputChannel.show()
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        outputChannel.appendLine(`EXPLAIN failed: ${msg}`)
+        vscode.window.showErrorMessage(`EXPLAIN failed: ${msg}`)
     }
-}
-
-// ============================================================================
-// Server Connection
-// ============================================================================
-
-async function connectServer() {
-    const config = vscode.workspace.getConfiguration('geode');
-    const host = config.get<string>('server.host', 'localhost');
-    const port = config.get<number>('server.port', DEFAULT_PORT);
-
-    outputChannel.appendLine(`Connecting to ${host}:${port}...`);
-    updateStatusBar('connecting');
-
-    try {
-        // Test connection with a simple query
-        await runGeodeQuery('RETURN 1', host, port, CONNECTION_TIMEOUT_MS);
-        isConnected = true;
-        updateStatusBar('connected');
-        vscode.window.showInformationMessage(`Connected to Geode server at ${host}:${port}`);
-    } catch (error) {
-        isConnected = false;
-        updateStatusBar('disconnected');
-        vscode.window.showErrorMessage(`Failed to connect: ${error}`);
-    }
-}
-
-function disconnectServer() {
-    isConnected = false;
-    updateStatusBar('disconnected');
-    vscode.window.showInformationMessage('Disconnected from Geode server');
 }
 
 // ============================================================================
