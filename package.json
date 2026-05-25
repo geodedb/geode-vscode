@@ -727,7 +727,8 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
+    "prebuild:webview": "mkdir -p out/webview && cp src/webview/adapter.template.js out/webview/",
+    "compile": "npm run prebuild:webview && tsc -p ./",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src --ext ts",
     "pretest": "npm run compile",
