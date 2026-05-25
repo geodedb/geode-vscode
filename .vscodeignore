@@ -25,8 +25,15 @@ SECURITY.md
 NOTICE
 LSP_GAPS.md
 eslint.config.mjs
-# Don't exclude node_modules - vsce needs them for dependency bundling
-# node_modules/@types/**
-# node_modules/typescript/**
-# Include webview assets (CSS, JS)
-!src/webviews/**
+# E2E harness and test artifacts
+e2e/**
+out/e2e/**
+out/test/**
+coverage/**
+# Sibling-repo build output (populated by scripts/fetch-release-assets.mjs)
+build/**
+# Build-time lock files and ephemeral admin credentials
+geode-ui.lock.json
+.geode_admin_password
+# .remember session caches
+.remember/**

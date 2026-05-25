@@ -222,9 +222,10 @@ publish-marketplace:
       echo "VSCE PAT retrieved successfully"
 
       # Publish each per-platform VSIX to the VS Code Marketplace.
-      shopt -s nullglob
+      # Use `find` rather than glob expansion so this works under
+      # busybox sh (no `shopt -s nullglob` support).
       published=0
-      for vsix in *.vsix; do
+      for vsix in $(find . -maxdepth 1 -name "*.vsix" -type f | sort); do
         echo "Publishing ${vsix}..."
         npx vsce publish --packagePath "${vsix}" --skip-license -p "$VSCE_PAT"
         published=$((published + 1))
@@ -301,10 +302,11 @@ publish-openvsx:
       # Ensure publisher namespace exists (idempotent)
       npx ovsx create-namespace codeprosorg -p "$OVSX_PAT" || true
 
-      # Publish each per-platform VSIX to Open VSX.
-      shopt -s nullglob
+      # Publish each per-platform VSIX to Open VSX. Use `find` rather
+      # than glob expansion so this works under busybox sh (no
+      # `shopt -s nullglob` support).
       published=0
-      for vsix in *.vsix; do
+      for vsix in $(find . -maxdepth 1 -name "*.vsix" -type f | sort); do
         echo "Publishing ${vsix}..."
         npx ovsx publish "${vsix}" -p "$OVSX_PAT"
         published=$((published + 1))
