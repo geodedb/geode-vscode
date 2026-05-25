@@ -12,7 +12,6 @@ import {
 } from 'vscode-languageclient/node';
 import { registerQueryPlanPanel } from './panels/QueryPlanPanel';
 import { registerTimeSeriesPanel } from './panels/TimeSeriesPanel';
-import { ResultsTablePanel, QueryResults } from './panels/ResultsTablePanel';
 import { GraphViewPanel, GraphData, GraphNode, GraphEdge } from './panels/GraphViewPanel';
 import { PerformanceMetricsPanel } from './panels/PerformanceMetricsPanel';
 import {
@@ -1381,24 +1380,10 @@ async function visualizeQueryAsGraph(): Promise<void> {
         const elements = extractGraphElements(rows);
 
         if (elements.nodes.length === 0 && elements.edges.length === 0) {
+            outputChannel.appendLine('Query returned no graph data (nodes or relationships). Use Run File for tabular results.');
             vscode.window.showInformationMessage(
-                'Query returned no graph data (nodes or relationships). Results shown in table view.',
-                'Show Table'
-            ).then(action => {
-                if (action === 'Show Table') {
-                    const queryResults: QueryResults = {
-                        columns: result.columnNames || (rows.length > 0 ? Object.keys(rows[0]) : []),
-                        rows: rows,
-                        executionTime: duration,
-                        rowCount: rows.length
-                    };
-                    const tablePanel = ResultsTablePanel.createOrShow({
-                        extensionUri: extensionContext.extensionUri,
-                        viewColumn: vscode.ViewColumn.Two
-                    });
-                    tablePanel.setResults(queryResults, query);
-                }
-            });
+                'Query returned no graph data (nodes or relationships). Use "Run File" to view results in the React results panel.'
+            );
             return;
         }
 

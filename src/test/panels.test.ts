@@ -266,45 +266,6 @@ describe('QueryPlanPanel Tests', () => {
     });
 });
 
-// Test suite for ResultsTablePanel
-describe('ResultsTablePanel Tests', () => {
-    it('Results data structure is valid', () => {
-        const results = {
-            columns: ['name', 'age', 'city'],
-            rows: [
-                ['Alice', 30, 'NYC'],
-                ['Bob', 25, 'LA'],
-            ],
-            rowCount: 2,
-            executionTime: 5,
-        };
-
-        assert.ok(Array.isArray(results.columns));
-        assert.ok(Array.isArray(results.rows));
-        assert.strictEqual(results.columns.length, 3);
-        assert.strictEqual(results.rows.length, 2);
-    });
-
-    it('Pagination config is valid', () => {
-        const pagination = {
-            pageSize: 50,
-            currentPage: 1,
-            totalPages: 10,
-            totalRows: 500,
-        };
-
-        assert.ok(pagination.pageSize > 0);
-        assert.ok(pagination.currentPage >= 1);
-        assert.ok(pagination.totalPages >= 1);
-    });
-
-    it('Export formats are supported', () => {
-        const formats = ['csv', 'json', 'xlsx'];
-        assert.ok(formats.includes('csv'));
-        assert.ok(formats.includes('json'));
-    });
-});
-
 // Test suite for TimeSeriesPanel
 describe('TimeSeriesPanel Tests', () => {
     it('Time series data structure is valid', () => {
@@ -356,11 +317,10 @@ describe('Panel Integration Tests', () => {
             'PathExplorerPanel',
             'GraphViewPanel',
             'QueryPlanPanel',
-            'ResultsTablePanel',
             'TimeSeriesPanel',
         ];
 
-        assert.strictEqual(panelTypes.length, 6);
+        assert.strictEqual(panelTypes.length, 5);
     });
 
     it('Message protocol is consistent', () => {
