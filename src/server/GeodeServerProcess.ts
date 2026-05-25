@@ -12,6 +12,7 @@ export interface ServerOpts {
     port?: number
     startupTimeoutMs?: number
     onLog?: (line: string) => void
+    lspUpstream?: string // "host:port" or undefined to keep --lsp-enabled=false
 }
 
 // Spawns the bundled geode-ui Go server and waits for it to log a
@@ -28,10 +29,14 @@ export class GeodeServerProcess {
         const bin = resolveBundledBinary(this.opts.extensionRoot, BundledBinary.GeodeUiServer)
         const args = [
             '--http-addr', `127.0.0.1:${this.opts.port ?? 0}`,
-            '--lsp-enabled=false',
             '--issuer-mode=ephemeral',
             '--log-format=text',
         ]
+        if (this.opts.lspUpstream) {
+            args.push('--lsp-enabled=true', '--lsp-upstream', this.opts.lspUpstream)
+        } else {
+            args.push('--lsp-enabled=false')
+        }
         this.child = cp.spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] })
         this.child.on('exit', () => { this.exited = true })
 
