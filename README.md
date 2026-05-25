@@ -75,7 +75,7 @@ Full-featured GQL (Graph Query Language) and Cypher support for the Geode graph 
 
 Recommended Geode install methods (OS packages or Docker):
 
-**Option A: Install by OS (recommended)**
+### Option A: Install by OS (recommended)
 
 Linux (Debian/Ubuntu):
 
@@ -97,7 +97,7 @@ brew install geode
 
 Windows: use WSL2, then follow the Linux steps above inside WSL.
 
-**Option B: Docker (fastest server setup)**
+### Option B: Docker (fastest server setup)
 
 ```bash
 docker run -d \
@@ -341,6 +341,17 @@ Settings in VS Code (`Ctrl+,`):
 2. Check host and port settings
 3. For TLS issues, try enabling `geode.server.insecure` temporarily
 4. Check firewall settings
+
+## Bundled Components
+
+The VSIX bundles two binaries (per-platform variants under `resources/bin/<platform>/`):
+
+- **geode-ui** - Go server that hosts the React management UI and proxies API requests.
+- **geode** - Geode graph-DB binary (provides LSP and query execution; used by sub-plan 6 and later).
+
+Licenses for both are collected into `resources/THIRD_PARTY_LICENSES.txt` at build time.
+
+Build matrix (per platform): `linux-x64`, `linux-arm64`, `darwin-x64`, `darwin-arm64`, `win32-x64`. CI uses `vsce package --target <platform>` to produce one VSIX per platform.
 
 ## Development
 

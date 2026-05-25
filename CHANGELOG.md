@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Foundation for embedded geode-ui management UI: extension now bundles the
+  geode-ui SPA and the geode-ui Go server binary. A new `geode.showSpaShell`
+  command opens the SPA inside a webview panel. (sub-plan 1)
+
+### Changed
+- Build now requires `npm run prepackage` before `vsce package`. The
+  prepackage step copies SPA assets from `../geode-ui` (local mode) or
+  downloads them from the GitLab registry (CI mode).
+
 ## [1.2.3] - 2026-02-09
 
 ### Changed
