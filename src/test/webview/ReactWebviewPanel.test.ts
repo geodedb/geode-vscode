@@ -34,7 +34,7 @@ describe('computePanelHtml', () => {
             route: '/dashboard',
             themeKind: 'dark',
             serverInfo: { host: '127.0.0.1', port: 4242, token: 't' },
-            resolveAsset: (rel) => `vscode-resource://${rel}`,
+            resolveAsset: (rel: string) => `vscode-resource://${rel}`,
         })
         assert.match(html, /adapter/)
         assert.match(html, /"port":4242/)
