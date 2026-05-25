@@ -736,7 +736,10 @@
     "test:integration": "mocha out/test/*.integration.test.js --timeout 60000",
     "test:coverage": "c8 --reporter=text --reporter=lcov mocha out/test/*.test.js --timeout 30000",
     "package": "vsce package --skip-license",
-    "publish": "vsce publish"
+    "publish": "vsce publish",
+    "fetch:ui": "node scripts/fetch-geode-ui.mjs",
+    "fetch:ui:local": "node scripts/fetch-geode-ui.mjs --source=local --path=../geode-ui",
+    "prepackage": "npm run fetch:ui:local && npm run compile"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"
