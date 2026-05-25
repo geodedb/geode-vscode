@@ -16,6 +16,37 @@ test('platformDir throws on unsupported tuples', () => {
   assert.throws(() => platformDir('aix', 'mips'), /unsupported platform/)
 })
 
+test('registry mode rejects sha256 mismatch', async () => {
+  const tmp = await fs.mkdtemp(path.join(process.env.TMPDIR ?? '/tmp', 'gv-'))
+  await fs.writeFile(
+    path.join(tmp, 'geode-ui.lock.json'),
+    JSON.stringify({
+      binaries: {
+        'geode-ui': {
+          '0.0.0': {
+            'linux-x64': { url: 'data:text/plain,WRONG', sha256: 'a'.repeat(64) },
+          },
+        },
+        geode: {
+          '0.0.0': {
+            'linux-x64': { url: 'data:text/plain,WRONG', sha256: 'a'.repeat(64) },
+          },
+        },
+      },
+    })
+  )
+  await assert.rejects(
+    fetchBinaries({
+      source: 'registry',
+      uiVersion: '0.0.0',
+      geodeVersion: '0.0.0',
+      outRoot: tmp,
+      targetPlatform: 'linux-x64',
+    }),
+    /sha256 mismatch/
+  )
+})
+
 test('local fetch copies geode-ui binary into platform dir', async () => {
   const tmp = await fs.mkdtemp(path.join(process.env.TMPDIR ?? '/tmp', 'gv-'))
   const fakeUi = path.join(tmp, 'fake-geode-ui')

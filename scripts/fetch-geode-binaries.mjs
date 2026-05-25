@@ -3,6 +3,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
+import { downloadToFile } from './lib/download.mjs'
 
 const SUPPORTED = new Set([
   'linux-x64',
@@ -24,7 +25,37 @@ export function binaryName(plat, base) {
 
 export async function fetchBinaries(opts) {
   if (opts.source === 'local') return fetchLocal(opts)
-  throw new Error('registry mode for binaries lands in task 5')
+  if (opts.source === 'registry') return fetchFromRegistry(opts)
+  throw new Error(`unknown source: ${opts.source}`)
+}
+
+async function fetchFromRegistry({ uiVersion, geodeVersion, outRoot, targetPlatform }) {
+  const lock = JSON.parse(
+    await fs.readFile(path.join(outRoot, 'geode-ui.lock.json'), 'utf8')
+  )
+  const plat = targetPlatform ?? platformDir(process.platform, process.arch)
+  const [platName] = plat.split('-')
+
+  await downloadAndVerify(
+    lock.binaries['geode-ui'][uiVersion][plat],
+    path.join(outRoot, 'resources/bin', plat, binaryName(platName, 'geode-ui'))
+  )
+  await downloadAndVerify(
+    lock.binaries.geode[geodeVersion][plat],
+    path.join(outRoot, 'resources/bin', plat, binaryName(platName, 'geode'))
+  )
+}
+
+async function downloadAndVerify(entry, dest) {
+  await fs.mkdir(path.dirname(dest), { recursive: true })
+  const digest = await downloadToFile(entry.url, dest)
+  if (digest !== entry.sha256) {
+    await fs.unlink(dest).catch(() => {})
+    throw new Error(
+      `sha256 mismatch for ${dest}: got ${digest} expected ${entry.sha256}`
+    )
+  }
+  await fs.chmod(dest, 0o755)
 }
 
 async function fetchLocal({ uiPath, geodePath, outRoot, onlyCurrentPlatform }) {
@@ -65,6 +96,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       source: { type: 'string', default: 'local' },
       uiPath: { type: 'string', default: '../geode-ui' },
       geodePath: { type: 'string', default: '../geode' },
+      uiVersion: { type: 'string' },
+      geodeVersion: { type: 'string' },
+      targetPlatform: { type: 'string' },
       onlyCurrentPlatform: { type: 'boolean', default: true },
     },
   })
