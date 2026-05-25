@@ -3,6 +3,12 @@ out/
 *.vsix
 coverage/
 
+# E2E harness — downloaded VSCode + cached user data
+.vscode-test/
+
+# Ephemeral admin secret printed by the bundled geode-ui server on first boot
+.geode_admin_password
+
 # Dependencies
 node_modules/
 
