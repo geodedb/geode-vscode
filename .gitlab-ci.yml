@@ -43,6 +43,13 @@ stages:
   - publish
   - release
 
+# Pin the upstream releases that the per-platform matrix bundles. Override
+# these via CI variables in the project settings when shipping against a
+# newer geode-ui / geode.
+variables:
+  SPA_VERSION: "v0.1.25"
+  GEODE_VERSION: "v0.6.0"
+
 # SECURITY: Issue #37 - Use image digests for reproducible builds
 # NOTE: Update these digests periodically from official Node.js images
 # Get digest with: docker pull node:20-alpine && docker inspect --format='{{.RepoDigests}}' node:20-alpine
