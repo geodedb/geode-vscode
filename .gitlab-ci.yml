@@ -134,7 +134,7 @@ package:linux-x64:
     - node scripts/fetch-release-assets.mjs --spaVersion="${SPA_VERSION}" --geodeVersion="${GEODE_VERSION}" --targetPlatform=linux-x64
     - node scripts/collect-bundled-licenses.mjs || true
     - npm run compile
-    - npx vsce package --target linux-x64 --skip-license --out geode-vscode-${CI_COMMIT_TAG}-linux-x64.vsix
+    - npx -y @vscode/vsce package --target linux-x64 --skip-license --out geode-vscode-${CI_COMMIT_TAG}-linux-x64.vsix
 
 package:linux-arm64:
   <<: *package-base
@@ -142,7 +142,7 @@ package:linux-arm64:
     - node scripts/fetch-release-assets.mjs --spaVersion="${SPA_VERSION}" --geodeVersion="${GEODE_VERSION}" --targetPlatform=linux-arm64
     - node scripts/collect-bundled-licenses.mjs || true
     - npm run compile
-    - npx vsce package --target linux-arm64 --skip-license --out geode-vscode-${CI_COMMIT_TAG}-linux-arm64.vsix
+    - npx -y @vscode/vsce package --target linux-arm64 --skip-license --out geode-vscode-${CI_COMMIT_TAG}-linux-arm64.vsix
 
 package:darwin-x64:
   <<: *package-base
@@ -150,7 +150,7 @@ package:darwin-x64:
     - node scripts/fetch-release-assets.mjs --spaVersion="${SPA_VERSION}" --geodeVersion="${GEODE_VERSION}" --targetPlatform=darwin-x64
     - node scripts/collect-bundled-licenses.mjs || true
     - npm run compile
-    - npx vsce package --target darwin-x64 --skip-license --out geode-vscode-${CI_COMMIT_TAG}-darwin-x64.vsix
+    - npx -y @vscode/vsce package --target darwin-x64 --skip-license --out geode-vscode-${CI_COMMIT_TAG}-darwin-x64.vsix
 
 package:darwin-arm64:
   <<: *package-base
@@ -158,7 +158,7 @@ package:darwin-arm64:
     - node scripts/fetch-release-assets.mjs --spaVersion="${SPA_VERSION}" --geodeVersion="${GEODE_VERSION}" --targetPlatform=darwin-arm64
     - node scripts/collect-bundled-licenses.mjs || true
     - npm run compile
-    - npx vsce package --target darwin-arm64 --skip-license --out geode-vscode-${CI_COMMIT_TAG}-darwin-arm64.vsix
+    - npx -y @vscode/vsce package --target darwin-arm64 --skip-license --out geode-vscode-${CI_COMMIT_TAG}-darwin-arm64.vsix
 
 # =============================================================================
 # Publish to VS Code Marketplace
@@ -227,7 +227,7 @@ publish-marketplace:
       published=0
       for vsix in $(find . -maxdepth 1 -name "*.vsix" -type f | sort); do
         echo "Publishing ${vsix}..."
-        npx vsce publish --packagePath "${vsix}" --skip-license -p "$VSCE_PAT"
+        npx -y @vscode/vsce publish --packagePath "${vsix}" --skip-license -p "$VSCE_PAT"
         published=$((published + 1))
       done
       if [ "$published" -eq 0 ]; then
