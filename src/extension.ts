@@ -21,9 +21,7 @@ import {
     buildExpandQuery,
     buildRelatedQuery
 } from './panels/GraphVisualizationPanel';
-// Old connection manager - keeping for backward compatibility during transition
 import {
-    ConnectionManager as OldConnectionManager,
     ConnectionProfile,
 } from './connections';
 import { ReactWebviewViewProvider } from './webview/ReactWebviewView';
