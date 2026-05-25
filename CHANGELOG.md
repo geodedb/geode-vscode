@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   geode-ui sidebar webview. Tree views removed. Persistence migrated
   from workspaceState/globalState to the bundled server's REST API.
   (sub-plan 4)
+- All analytics surfaces (graph visualization, query plan, time series,
+  performance metrics, path explorer) now open as React webview panels
+  backed by geode-ui SPA routes. Native panel implementations are
+  removed. (sub-plan 5)
 
 ### Removed
 - src/connections/ConnectionsTreeProvider.ts - superseded by the sidebar
@@ -38,6 +42,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - src/views/QueryHistoryProvider.ts
 - src/views/SavedQueriesProvider.ts
 - geodeSchemaExplorer, geodeQueryHistory, geodeSavedQueries view declarations
+- src/panels/GraphViewPanel.ts
+- src/panels/GraphVisualizationPanel.ts
+- src/panels/PathExplorerPanel.ts
+- src/panels/PerformanceMetricsPanel.ts
+- src/panels/QueryPlanPanel.ts
+- src/panels/TimeSeriesPanel.ts
+- src/panels/BaseWebviewPanel.ts
+- src/webviews/graph/, src/webviews/metrics/, src/webviews/paths/, src/webviews/shared/
+- In-extension extractGraphData / extractGraphElements helpers (logic moved to src/bridge/handlers/graphOps.ts)
 
 ## [1.2.3] - 2026-02-09
 
