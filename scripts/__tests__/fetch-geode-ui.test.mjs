@@ -30,3 +30,11 @@ test('rejects local mode when ../geode-ui/internal/ui/dist is missing', async ()
     /dist not found/
   )
 })
+
+import { sha256OfBuffer } from '../lib/sha256.mjs'
+
+test('sha256OfBuffer matches a known fixture', async () => {
+  const buf = Buffer.from('hello world')
+  const hex = await sha256OfBuffer(buf)
+  assert.equal(hex, 'b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9')
+})

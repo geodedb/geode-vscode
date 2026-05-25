@@ -1,0 +1,9 @@
+{
+  "$comment": "Pins SPA + server binary versions for reproducible VSIX builds. CI updates this file via scripts/bump-lock.mjs (sub-plan 1, task 5).",
+  "spa": {
+    "PLACEHOLDER_VERSION": {
+      "url": "PLACEHOLDER_URL",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  }
+}

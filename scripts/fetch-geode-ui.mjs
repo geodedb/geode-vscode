@@ -3,6 +3,8 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
+import { downloadToFile } from './lib/download.mjs'
+import { x as tarExtract } from 'tar'
 
 const SPA_RELATIVE = 'internal/ui/dist'
 
@@ -47,8 +49,30 @@ async function copyTree(src, dst) {
   }
 }
 
-async function fetchRegistry(_version, _outRoot) {
-  throw new Error('registry mode not implemented in this task')
+async function fetchRegistry(version, outRoot) {
+  if (!version) throw new Error('registry mode requires --version')
+  const lock = JSON.parse(
+    await fs.readFile(path.join(outRoot, 'geode-ui.lock.json'), 'utf8')
+  )
+  const entry = lock.spa[version]
+  if (!entry) throw new Error(`no lock entry for spa@${version}`)
+  const tmpDest = path.join(outRoot, 'resources/webview/.download.tar.gz')
+  const digest = await downloadToFile(entry.url, tmpDest)
+  if (digest !== entry.sha256) {
+    await fs.unlink(tmpDest).catch(() => {})
+    throw new Error(
+      `sha256 mismatch for spa@${version}: ${digest} expected ${entry.sha256}`
+    )
+  }
+  const target = path.join(outRoot, 'resources/webview')
+  await fs.rm(target, { recursive: true, force: true })
+  await fs.mkdir(target, { recursive: true })
+  await tarExtract({ file: tmpDest, cwd: target, strip: 0 })
+  await fs.unlink(tmpDest)
+  // Restore the sentinel file so the empty directory stays tracked by git
+  // when resources/webview/** is gitignored except for .gitkeep.
+  await fs.writeFile(path.join(target, '.gitkeep'), '')
+  return { target }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
