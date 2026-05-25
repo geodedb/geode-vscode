@@ -608,13 +608,16 @@
     "prepackage": "npm run fetch:ui:local && npm run fetch:bin:local && node scripts/collect-bundled-licenses.mjs && npm run compile"
   },
   "dependencies": {
-    "vscode-languageclient": "^9.0.1"
+    "vscode-languageclient": "^9.0.1",
+    "vscode-ws-jsonrpc": "^3.5.0",
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@types/glob": "^8.1.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "^18.0.0",
     "@types/vscode": "^1.75.0",
+    "@types/ws": "^8.18.1",
     "@typescript-eslint/eslint-plugin": "^8.54.0",
     "@typescript-eslint/parser": "^8.54.0",
     "@vscode/test-electron": "^2.5.2",
