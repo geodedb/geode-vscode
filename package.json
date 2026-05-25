@@ -45,8 +45,7 @@
     "workspaceContains:**/*.gcypher",
     "workspaceContains:**/*.pgql",
     "workspaceContains:**/*.cypher",
-    "onCommand:geode.runQuery",
-    "onCommand:geode.connectServer"
+    "onCommand:geode.runQuery"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -140,18 +139,6 @@
         "title": "Format GQL Document",
         "category": "Geode",
         "icon": "$(code)"
-      },
-      {
-        "command": "geode.connectServer",
-        "title": "Connect to Geode Server",
-        "category": "Geode",
-        "icon": "$(plug)"
-      },
-      {
-        "command": "geode.disconnectServer",
-        "title": "Disconnect from Server",
-        "category": "Geode",
-        "icon": "$(debug-disconnect)"
       },
       {
         "command": "geode.showDocumentation",
@@ -482,20 +469,6 @@
           "default": true,
           "description": "Enable the Geode Language Server"
         },
-        "geode.lsp.path": {
-          "type": "string",
-          "default": "geode",
-          "scope": "machine",
-          "description": "Path to the geode executable. SECURITY: This setting is restricted to machine scope to prevent malicious workspace attacks."
-        },
-        "geode.lsp.args": {
-          "type": "array",
-          "default": [
-            "lsp"
-          ],
-          "scope": "machine",
-          "description": "Arguments to pass to the LSP server. SECURITY: This setting is restricted to machine scope to prevent malicious workspace attacks."
-        },
         "geode.lsp.trace.server": {
           "type": "string",
           "enum": [
@@ -506,29 +479,16 @@
           "default": "off",
           "description": "Traces the communication between VS Code and the language server"
         },
-        "geode.server.host": {
-          "type": "string",
-          "default": "localhost",
-          "scope": "machine",
-          "description": "Geode server hostname. SECURITY: Restricted to machine scope to prevent malicious workspace redirection."
-        },
-        "geode.server.port": {
+        "geode.bundledServer.startupTimeoutMs": {
           "type": "number",
-          "default": 3141,
-          "scope": "machine",
-          "description": "Geode server port. SECURITY: Restricted to machine scope to prevent malicious workspace redirection."
+          "default": 10000,
+          "description": "Milliseconds to wait for the bundled geode-ui server to log its LISTENING line before failing activation."
         },
-        "geode.server.autoConnect": {
-          "type": "boolean",
-          "default": false,
-          "scope": "machine",
-          "description": "Automatically connect to the server on startup. SECURITY: This setting is restricted to machine scope to prevent malicious workspace attacks."
-        },
-        "geode.server.insecure": {
-          "type": "boolean",
-          "default": false,
-          "scope": "machine",
-          "description": "Skip TLS certificate verification (use ONLY for development/self-signed certs). SECURITY WARNING: This setting disables TLS security and is restricted to machine scope. Do not use in production."
+        "geode.bundledServer.logLevel": {
+          "type": "string",
+          "enum": ["debug", "info", "warn", "error"],
+          "default": "info",
+          "description": "Log level passed to the bundled geode-ui server."
         },
         "geode.query.timeout": {
           "type": "number",

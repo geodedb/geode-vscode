@@ -56,10 +56,11 @@ let queryRunner: HttpQueryRunner | undefined;
 const gqlExtensions = new Set(['.gql', '.gcypher', '.pgql']);
 const cypherExtensions = new Set(['.cypher']);
 
-async function ensureServerStarted(context: vscode.ExtensionContext): Promise<{ host: string; port: number; token: string }> {
+async function ensureServerStarted(context: vscode.ExtensionContext, startupTimeoutMs?: number): Promise<{ host: string; port: number; token: string }> {
     if (serverInfo) return serverInfo;
     serverProcess = new GeodeServerProcess({
         extensionRoot: context.extensionUri.fsPath,
+        startupTimeoutMs,
         onLog: (line) => outputChannel.appendLine(`[geode-ui] ${line}`),
     });
     const info = await serverProcess.start();
@@ -112,10 +113,14 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(statusBarItem);
     updateStatusBar('disconnected');
 
+    // Read bundled-server settings before starting any child process.
+    const bundledCfg = vscode.workspace.getConfiguration('geode.bundledServer')
+    const startupTimeoutMs = bundledCfg.get<number>('startupTimeoutMs', 10_000)
+
     // Eagerly start the bundled server so the sidebar can boot with it.
     let startedServerInfo: { host: string; port: number; token: string } | undefined;
     try {
-        startedServerInfo = await ensureServerStarted(context);
+        startedServerInfo = await ensureServerStarted(context, startupTimeoutMs);
     } catch (err) {
         outputChannel.appendLine(`[geode] bundled server did not start: ${err}`);
     }
