@@ -2,10 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { platformDir, fetchBinaries } from '../fetch-geode-binaries.mjs'
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 test('platformDir maps node platform/arch to resources/bin slug', () => {
   assert.equal(platformDir('linux', 'x64'), 'linux-x64')
