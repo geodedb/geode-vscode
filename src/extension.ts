@@ -25,9 +25,13 @@ import {
 import {
     ConnectionManager as OldConnectionManager,
     ConnectionProfile,
-    registerConnectionsView,
-    ConnectionsTreeProvider
 } from './connections';
+import { ReactWebviewViewProvider } from './webview/ReactWebviewView';
+import {
+    registerConnectionsHandlers,
+    makePemFilePicker,
+    makeVsCodeSecrets,
+} from './sidebar/ConnectionsHandler';
 
 // New enhanced components
 import { EnhancedConnectionManager } from './client/EnhancedConnectionManager';
@@ -56,7 +60,7 @@ let serverInfo: { host: string; port: number; token: string } | undefined;
 let statusBarItem: vscode.StatusBarItem;
 let outputChannel: vscode.OutputChannel;
 let connectionManager: EnhancedConnectionManager; // Using new manager
-let _connectionsTreeProvider: ConnectionsTreeProvider;
+let sidebarProvider: ReactWebviewViewProvider | undefined;
 let schemaExplorer: EnhancedSchemaExplorerProvider; // New schema explorer
 let queryHistoryProvider: QueryHistoryProvider; // Query history tracking
 let savedQueriesProvider: SavedQueriesProvider; // Saved queries management
@@ -167,13 +171,35 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(statusBarItem);
     updateStatusBar('disconnected');
 
-    // Register connections view and commands (using compatibility layer)
-    _connectionsTreeProvider = registerConnectionsView(
-        context,
-        connectionManager as any as OldConnectionManager, // Type bridge for compatibility
-        outputChannel,
-        handleConnect,
-        handleDisconnect
+    // Eagerly start the bundled server so the sidebar can boot with it.
+    let startedServerInfo: { host: string; port: number; token: string } | undefined;
+    try {
+        startedServerInfo = await ensureServerStarted(context);
+    } catch (err) {
+        outputChannel.appendLine(`[geode] bundled server did not start: ${err}`);
+    }
+
+    // Register sidebar webview provider
+    sidebarProvider = new ReactWebviewViewProvider({
+        extensionRoot: context.extensionUri.fsPath,
+        route: '/sidebar',
+        serverInfo: startedServerInfo ?? { host: 'localhost', port: 0, token: '' },
+        register: (host) => {
+            if (startedServerInfo) {
+                host.register('http.request', createHttpForwardHandler({ serverInfo: startedServerInfo }));
+                host.register('health.ping', healthPingHandler({ serverInfo: startedServerInfo }));
+            }
+            registerConnectionsHandlers(host, {
+                manager: connectionManager,
+                secrets: makeVsCodeSecrets(context.secrets),
+                pickFile: makePemFilePicker(),
+            });
+        },
+    });
+    context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider('geodeSidebar', sidebarProvider, {
+            webviewOptions: { retainContextWhenHidden: true },
+        })
     );
 
     // Start LSP if enabled

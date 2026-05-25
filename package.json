@@ -114,26 +114,27 @@
     "views": {
       "geode-explorer": [
         {
-          "id": "geodeConnections",
-          "name": "Connections",
-          "icon": "$(plug)",
-          "contextualTitle": "Geode Connections"
+          "type": "webview",
+          "id": "geodeSidebar",
+          "name": "Geode",
+          "icon": "$(database)",
+          "contextualTitle": "Geode"
         },
         {
           "id": "geodeSchemaExplorer",
-          "name": "Schema Explorer",
+          "name": "Schema Explorer (legacy)",
           "icon": "$(database)",
           "contextualTitle": "Geode Schema"
         },
         {
           "id": "geodeQueryHistory",
-          "name": "Query History",
+          "name": "Query History (legacy)",
           "icon": "$(history)",
           "contextualTitle": "Geode Query History"
         },
         {
           "id": "geodeSavedQueries",
-          "name": "Saved Queries",
+          "name": "Saved Queries (legacy)",
           "icon": "$(bookmark)",
           "contextualTitle": "Geode Saved Queries"
         }
@@ -453,21 +454,6 @@
       ],
       "view/title": [
         {
-          "command": "geode.connections.add",
-          "when": "view == geodeConnections",
-          "group": "navigation"
-        },
-        {
-          "command": "geode.connections.refresh",
-          "when": "view == geodeConnections",
-          "group": "navigation"
-        },
-        {
-          "command": "geode.connections.disconnect",
-          "when": "view == geodeConnections && geode.hasActiveConnection",
-          "group": "navigation"
-        },
-        {
           "command": "geode.refreshSchema",
           "when": "view == geodeSchemaExplorer",
           "group": "navigation"
@@ -504,36 +490,6 @@
         }
       ],
       "view/item/context": [
-        {
-          "command": "geode.connections.connect",
-          "when": "view == geodeConnections && viewItem =~ /^connection/",
-          "group": "inline"
-        },
-        {
-          "command": "geode.connections.edit",
-          "when": "view == geodeConnections && viewItem =~ /^connection/",
-          "group": "1_connection@1"
-        },
-        {
-          "command": "geode.connections.setDefault",
-          "when": "view == geodeConnections && viewItem =~ /^connection/ && viewItem !~ /default/",
-          "group": "1_connection@2"
-        },
-        {
-          "command": "geode.connections.copyDsn",
-          "when": "view == geodeConnections && viewItem =~ /^connection/",
-          "group": "2_copy@1"
-        },
-        {
-          "command": "geode.connections.disconnect",
-          "when": "view == geodeConnections && viewItem =~ /connected/",
-          "group": "3_disconnect@1"
-        },
-        {
-          "command": "geode.connections.delete",
-          "when": "view == geodeConnections && viewItem =~ /^connection/",
-          "group": "4_delete@1"
-        },
         {
           "command": "geode.history.rerunQuery",
           "when": "view == geodeQueryHistory && viewItem =~ /^queryHistory/",
