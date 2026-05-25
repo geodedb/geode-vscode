@@ -46,11 +46,14 @@ import {
     registerSavedQueriesCommands
 } from './views/SavedQueriesProvider';
 import { GeodeMCPServer, registerMCPServer } from './mcp/GeodeMCPServer';
-import { isValidBinaryPath, DEFAULT_PORT, CONNECTION_TIMEOUT_MS, QUERY_TIMEOUT_MS } from './utils/security';
+import { isValidBinaryPath, DEFAULT_PORT, CONNECTION_TIMEOUT_MS, QUERY_TIMEOUT_MS, secureId } from './utils/security';
 import { GeodeServerProcess } from './server/GeodeServerProcess';
 import { openReactWebviewPanel } from './webview/ReactWebviewPanel';
 import { createHttpForwardHandler } from './bridge/handlers/httpForward';
 import { healthPingHandler } from './bridge/handlers/health';
+import { HttpQueryRunner } from './server/HttpQueryRunner';
+import { createQueryExecuteHandler } from './bridge/handlers/queryExecute';
+import { openResultsPanel, pushResults } from './panels/openResultsPanel';
 
 let client: LanguageClient | undefined;
 let serverProcess: GeodeServerProcess | undefined;
@@ -65,6 +68,7 @@ let savedQueriesProvider: SavedQueriesProvider; // Saved queries management
 let _mcpServer: GeodeMCPServer; // MCP server for AI integration
 let isConnected = false;
 let extensionContext: vscode.ExtensionContext; // Store context for panel access
+let queryRunner: HttpQueryRunner | undefined;
 
 const gqlExtensions = new Set(['.gql', '.gcypher', '.pgql']);
 const cypherExtensions = new Set(['.cypher']);
@@ -175,6 +179,13 @@ export async function activate(context: vscode.ExtensionContext) {
         startedServerInfo = await ensureServerStarted(context);
     } catch (err) {
         outputChannel.appendLine(`[geode] bundled server did not start: ${err}`);
+    }
+
+    if (startedServerInfo) {
+        queryRunner = new HttpQueryRunner({
+            serverInfo: startedServerInfo,
+            activeConnectionId: () => connectionManager.getActiveProfile()?.id ?? null,
+        });
     }
 
     // Register sidebar webview provider
@@ -788,7 +799,6 @@ async function executeMultipleStatements(statements: string[]): Promise<void> {
         }
     }
 
-    const password = await connectionManager.getPassword(activeConnection.id);
     let successCount = 0;
     let errorCount = 0;
 
@@ -798,45 +808,16 @@ async function executeMultipleStatements(statements: string[]): Promise<void> {
         cancellable: true
     }, async (progress, token) => {
         for (let i = 0; i < statements.length; i++) {
-            if (token.isCancellationRequested) {
-                outputChannel.appendLine(`\n--- Cancelled at statement ${i + 1}/${statements.length} ---`);
-                break;
-            }
-
+            if (token.isCancellationRequested) break;
             const stmt = statements[i];
-            progress.report({
-                message: `${i + 1}/${statements.length}`,
-                increment: 100 / statements.length
-            });
-
-            outputChannel.appendLine(`\n[${i + 1}/${statements.length}] ${stmt.substring(0, 50)}${stmt.length > 50 ? '...' : ''}`);
-
+            progress.report({ message: `${i + 1}/${statements.length}`, increment: 100 / statements.length });
             try {
-                const result = await runGeodeQueryWithProfile(stmt, activeConnection, password);
+                const result = await queryRunner!.run(stmt);
                 successCount++;
-
-                // Parse and display result briefly
-                try {
-                    const lines = result.trim().split('\n');
-                    for (const line of lines) {
-                        if (line.trim()) {
-                            const json = JSON.parse(line);
-                            if (json.result?.rows?.length > 0) {
-                                outputChannel.appendLine(`  → ${json.result.rows.length} row(s)`);
-                            } else if (json.status_class === '00000') {
-                                outputChannel.appendLine(`  → OK`);
-                            }
-                        }
-                    }
-                } catch {
-                    // Not JSON, show raw
-                    if (result.trim()) {
-                        outputChannel.appendLine(`  → ${result.trim().substring(0, 100)}`);
-                    }
-                }
-            } catch (error) {
+                outputChannel.appendLine(`  -> ${result.rows.length} row(s) in ${result.durationMs} ms`);
+            } catch (e) {
                 errorCount++;
-                outputChannel.appendLine(`  ✗ Error: ${error}`);
+                outputChannel.appendLine(`  X ${e instanceof Error ? e.message : String(e)}`);
             }
         }
     });
@@ -852,143 +833,51 @@ async function executeMultipleStatements(statements: string[]): Promise<void> {
     outputChannel.show();
 }
 
-async function executeQuery(query: string) {
-    const client = connectionManager.getClient();
-
-    if (!client.isConnected()) {
-        // Get existing connection profiles
-        const profiles = connectionManager.getProfiles();
-
-        if (profiles.length === 0) {
-            // No existing connections, prompt to add one
-            const result = await vscode.window.showWarningMessage(
-                'No connections configured. Would you like to add one?',
-                'Add Connection',
-                'Cancel'
-            );
-            if (result === 'Add Connection') {
-                await vscode.commands.executeCommand('geode.connections.add');
-            }
-            return;
-        }
-
-        // Show existing connections to choose from
-        const items = [
-            ...profiles.map(p => ({
-                label: p.name,
-                description: `${p.host}:${p.port}`,
-                detail: p.isDefault ? '$(star) Default' : undefined,
-                profile: p
-            })),
-            {
-                label: '$(add) Add New Connection...',
-                description: 'Create a new connection profile',
-                profile: null as any
-            }
-        ];
-
-        const selected = await vscode.window.showQuickPick(items, {
-            placeHolder: 'Select a connection or add a new one',
-            title: 'Connect to Geode Server'
-        });
-
-        if (!selected) {
-            return; // Cancelled
-        }
-
-        if (!selected.profile) {
-            // Add new connection
-            await vscode.commands.executeCommand('geode.connections.add');
-            return;
-        }
-
-        // Connect to the selected profile
-        try {
-            await connectionManager.connect(selected.profile.id);
-        } catch (error: any) {
-            vscode.window.showErrorMessage(`Failed to connect: ${error.message}`);
-            return;
-        }
-    }
-
-    const activeProfile = connectionManager.getActiveProfile();
-    outputChannel.appendLine(`\n--- Executing Query on ${activeProfile?.name || 'Geode'} ---`);
-    outputChannel.appendLine(query);
-    outputChannel.appendLine('---');
-
-    try {
-        const startTime = Date.now();
-        const result = await client.query(query);
-        const duration = Date.now() - startTime;
-
-        outputChannel.appendLine(`Query completed in ${duration}ms`);
-
-        // Convert result to displayable format
-        const rows = await result.toObjects();
-        const columns = result.columnNames || (rows.length > 0 ? Object.keys(rows[0]) : []);
-
-        outputChannel.appendLine(`Returned ${rows.length} rows`);
-
-        // Prepare results for table panel
-        const queryResults: QueryResults = {
-            columns: columns,
-            rows: rows,
-            executionTime: duration,
-            rowCount: rows.length
-        };
-
-        // Show results in table panel
-        const extensionUri = extensionContext.extensionUri;
-        const tablePanel = ResultsTablePanel.createOrShow({
-            extensionUri,
-            viewColumn: vscode.ViewColumn.Two,
-            preserveFocus: true
-        });
-        tablePanel.setResults(queryResults, query);
-
-        // Check if result contains graph data and show graph view
-        const graphData = extractGraphData(rows);
-        if (graphData && (graphData.nodes.length > 0 || graphData.edges.length > 0)) {
-            const graphPanel = GraphViewPanel.createOrShow({
-                extensionUri,
-                viewColumn: vscode.ViewColumn.Three,
-                preserveFocus: true
-            });
-            graphPanel.setGraphData(graphData, query);
-        }
-
-        // Add to query history
-        queryHistoryProvider.addEntry({
-            query: query,
-            duration: duration,
-            rowCount: rows.length,
-            connectionName: activeProfile?.name,
-            success: true
-        });
-
-        vscode.window.showInformationMessage(
-            `Query returned ${rows.length} rows in ${duration}ms`
+async function executeQuery(statement: string): Promise<void> {
+    if (!queryRunner || !queryRunner.isConnected) {
+        const result = await vscode.window.showWarningMessage(
+            'No active connection. Open the Geode sidebar to connect.',
+            'Open Sidebar'
         );
-    } catch (error: any) {
-        outputChannel.appendLine(`Error: ${error.message || error}`);
-        outputChannel.appendLine(error.stack || '');
-
-        // Add failed query to history
-        queryHistoryProvider.addEntry({
-            query: query,
-            connectionName: activeProfile?.name,
-            success: false,
-            error: error.message || String(error)
-        });
-
-        vscode.window.showErrorMessage(
-            `Query failed: ${error.message || error}`,
-            'Show Output'
-        ).then(action => {
-            if (action === 'Show Output') {
-                outputChannel.show();
-            }
-        });
+        if (result === 'Open Sidebar') {
+            await vscode.commands.executeCommand('workbench.view.extension.geode-explorer');
+        }
+        return;
+    }
+    if (!serverInfo) return;
+    const queryId = secureId('q');
+    const panel = openResultsPanel({
+        extensionRoot: extensionContext.extensionUri.fsPath,
+        serverInfo: serverInfo,
+        registerCommon: (host) => {
+            host.register('http.request', createHttpForwardHandler({ serverInfo: serverInfo! }));
+            host.register('query.execute', createQueryExecuteHandler({ runner: queryRunner! }));
+        },
+    });
+    try {
+        const result = await queryRunner.run(statement);
+        pushResults(panel, queryId, statement, result);
+        if (queryHistoryProvider) {
+            queryHistoryProvider.addEntry({
+                query: statement,
+                duration: result.durationMs,
+                rowCount: result.rows.length,
+                connectionName: connectionManager.getActiveProfile()?.name,
+                success: true,
+            });
+        }
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        outputChannel.appendLine(`Error: ${msg}`);
+        if (queryHistoryProvider) {
+            queryHistoryProvider.addEntry({
+                query: statement,
+                connectionName: connectionManager.getActiveProfile()?.name,
+                success: false,
+                error: msg,
+            });
+        }
+        vscode.window.showErrorMessage(`Query failed: ${msg}`);
     }
 }
 
