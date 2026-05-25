@@ -20,10 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   native geodeConnections tree view is removed. All geode.connections.*
   commands focus the sidebar and dispatch navigation events into the
   React UI. (sub-plan 2)
+- Query execution now routes through the bundled geode-ui server and
+  surfaces results in a React webview panel. The native ResultsTablePanel
+  is removed. (sub-plan 3)
 
 ### Removed
 - src/connections/ConnectionsTreeProvider.ts - superseded by the sidebar
   webview.
+- src/panels/ResultsTablePanel.ts
+- src/webviews/table/*
 
 ## [1.2.3] - 2026-02-09
 
