@@ -26,3 +26,9 @@ data/server.key
 
 # Private keys
 data/server.key
+
+# Bundled assets fetched at build time
+/resources/bin/**
+!/resources/bin/.gitkeep
+/resources/webview/**
+!/resources/webview/.gitkeep
