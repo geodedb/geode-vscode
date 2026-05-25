@@ -29,6 +29,12 @@ import {
     makePemFilePicker,
     makeVsCodeSecrets,
 } from './sidebar/ConnectionsHandler';
+import { HttpServerClient } from './server/ServerClient';
+import { registerSchemaHandlers } from './sidebar/SchemaHandler';
+import { registerHistoryHandlers } from './sidebar/HistoryHandler';
+import { registerSavedQueriesHandlers } from './sidebar/SavedQueriesHandler';
+import { migrateLegacyHistory } from './sidebar/historyMigration';
+import { migrateLegacySavedQueries } from './sidebar/savedQueriesMigration';
 
 // New enhanced components
 import { EnhancedConnectionManager } from './client/EnhancedConnectionManager';
@@ -180,11 +186,13 @@ export async function activate(context: vscode.ExtensionContext) {
         outputChannel.appendLine(`[geode] bundled server did not start: ${err}`);
     }
 
+    let serverClient: HttpServerClient | undefined;
     if (startedServerInfo) {
         queryRunner = new HttpQueryRunner({
             serverInfo: startedServerInfo,
             activeConnectionId: () => connectionManager.getActiveProfile()?.id ?? null,
         });
+        serverClient = new HttpServerClient(startedServerInfo);
     }
 
     // Register sidebar webview provider
@@ -202,6 +210,14 @@ export async function activate(context: vscode.ExtensionContext) {
                 secrets: makeVsCodeSecrets(context.secrets),
                 pickFile: makePemFilePicker(),
             });
+            if (serverClient) {
+                registerSchemaHandlers(host, {
+                    client: serverClient,
+                    activeConnectionId: () => connectionManager.getActiveProfile()?.id ?? null,
+                });
+                registerHistoryHandlers(host, { client: serverClient });
+                registerSavedQueriesHandlers(host, { client: serverClient });
+            }
         },
     });
     context.subscriptions.push(
@@ -209,6 +225,27 @@ export async function activate(context: vscode.ExtensionContext) {
             webviewOptions: { retainContextWhenHidden: true },
         })
     );
+
+    if (serverClient) {
+        void (async () => {
+            try {
+                await migrateLegacyHistory({
+                    globalState: context.globalState,
+                    postEntry: (e) => (serverClient as HttpServerClient).request('/api/v1/history', 'POST', JSON.stringify(e)).then(() => undefined),
+                });
+            } catch (err) {
+                outputChannel.appendLine(`history migration failed: ${err instanceof Error ? err.message : String(err)}`);
+            }
+            try {
+                await migrateLegacySavedQueries({
+                    globalState: context.globalState,
+                    postBulk: (list) => (serverClient as HttpServerClient).request('/api/v1/saved/bulk', 'POST', JSON.stringify({ items: list })).then(() => undefined),
+                });
+            } catch (err) {
+                outputChannel.appendLine(`saved-queries migration failed: ${err instanceof Error ? err.message : String(err)}`);
+            }
+        })();
+    }
 
     // Start LSP if enabled
     const config = vscode.workspace.getConfiguration('geode');
