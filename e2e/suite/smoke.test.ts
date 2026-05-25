@@ -4,7 +4,9 @@ import * as vscode from 'vscode'
 describe('smoke', () => {
     it('activates the extension', async () => {
         const ext = vscode.extensions.getExtension('codeprosorg.geode-vscode')
-        assert.ok(ext, 'extension installed')
+        if (!ext) {
+            assert.fail('extension not installed')
+        }
         await ext.activate()
         assert.equal(ext.isActive, true)
     })
