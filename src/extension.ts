@@ -10,16 +10,8 @@ import {
     ErrorAction,
     CloseAction
 } from 'vscode-languageclient/node';
-import { registerQueryPlanPanel } from './panels/QueryPlanPanel';
-import { registerTimeSeriesPanel } from './panels/TimeSeriesPanel';
-import { GraphViewPanel, GraphData, GraphNode, GraphEdge } from './panels/GraphViewPanel';
-import { PerformanceMetricsPanel } from './panels/PerformanceMetricsPanel';
-import {
-    GraphVisualizationPanel,
-    GraphElements,
-    buildExpandQuery,
-    buildRelatedQuery
-} from './panels/GraphVisualizationPanel';
+import { openAnalyticsPanel } from './panels/openAnalyticsPanel';
+import { registerGraphOpsHandlers } from './bridge/handlers/graphOps';
 import {
     ConnectionProfile,
 } from './connections';
@@ -316,15 +308,87 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('geode.explainQuery', explainQuery),
         vscode.commands.registerCommand('geode.restartLsp', () => restartLanguageServer(context)),
         vscode.commands.registerCommand('geode.runFile', runFile),
-        vscode.commands.registerCommand('geode.showPerformanceMetrics', () => {
-            PerformanceMetricsPanel.createOrShow({
-                extensionUri: context.extensionUri,
-                viewColumn: vscode.ViewColumn.Two,
-                geodeClient: connectionManager.getClient()
-            });
+    );
+
+    // Analytics panels (graph visualization)
+    const registerSimplePanel = (cmd: string, key: string, route: string, title: string) =>
+        vscode.commands.registerCommand(cmd, () => {
+            if (!serverInfo) {
+                vscode.window.showWarningMessage('Geode server not ready yet.')
+                return
+            }
+            openAnalyticsPanel({
+                key: { id: key, route, title, viewColumn: vscode.ViewColumn.Two },
+                extensionRoot: context.extensionUri.fsPath,
+                serverInfo: serverInfo,
+                register: (host) => {
+                    host.register('http.request', createHttpForwardHandler({ serverInfo: serverInfo! }))
+                    if (queryRunner) {
+                        host.register('query.execute', createQueryExecuteHandler({ runner: queryRunner }))
+                    }
+                },
+            })
+        })
+
+    context.subscriptions.push(
+        registerSimplePanel('geode.showPerformanceMetrics', 'metrics', '/dashboard', 'Geode Metrics'),
+        registerSimplePanel('geode.showAnalyticsDashboard', 'dashboard', '/dashboard', 'Geode Analytics'),
+        registerSimplePanel('geode.showQueryPlan', 'plan', '/query/plan', 'Query Plan'),
+        registerSimplePanel('geode.showPathExplorer', 'paths', '/graph/paths', 'Path Explorer'),
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('geode.showGraphVisualization', () => {
+            if (!serverInfo) {
+                vscode.window.showWarningMessage('Geode server not ready yet.')
+                return
+            }
+            openAnalyticsPanel({
+                key: { id: 'graph', route: '/graph', title: 'Geode Graph', viewColumn: vscode.ViewColumn.Two },
+                extensionRoot: context.extensionUri.fsPath,
+                serverInfo: serverInfo,
+                register: (host) => {
+                    host.register('http.request', createHttpForwardHandler({ serverInfo: serverInfo! }))
+                    if (queryRunner) {
+                        host.register('query.execute', createQueryExecuteHandler({ runner: queryRunner }))
+                        registerGraphOpsHandlers(host, { runner: queryRunner })
+                    }
+                },
+            })
         }),
-        vscode.commands.registerCommand('geode.showGraphVisualization', showGraphVisualization),
-        vscode.commands.registerCommand('geode.visualizeQuery', visualizeQueryAsGraph)
+        vscode.commands.registerCommand('geode.visualizeQuery', async () => {
+            const editor = vscode.window.activeTextEditor
+            if (!editor) {
+                vscode.window.showWarningMessage('No active editor')
+                return
+            }
+            const text = editor.selection.isEmpty ? editor.document.getText() : editor.document.getText(editor.selection)
+            if (!text.trim() || !serverInfo || !queryRunner) return
+            const panel = openAnalyticsPanel({
+                key: { id: 'graph', route: '/graph?from=editor', title: 'Geode Graph' },
+                extensionRoot: context.extensionUri.fsPath,
+                serverInfo: serverInfo,
+                register: (host) => {
+                    host.register('http.request', createHttpForwardHandler({ serverInfo: serverInfo! }))
+                    host.register('query.execute', createQueryExecuteHandler({ runner: queryRunner! }))
+                    registerGraphOpsHandlers(host, { runner: queryRunner! })
+                },
+            })
+            try {
+                const result = await queryRunner.run(text)
+                const { extractGraph } = await import('./bridge/handlers/graphOps')
+                const elements = extractGraph(result.rows as Array<Record<string, unknown>>)
+                void panel.panel.webview.postMessage({
+                    kind: 'event',
+                    op: 'graph.load',
+                    payload: { statement: text, ...elements, durationMs: result.durationMs },
+                })
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err)
+                outputChannel.appendLine(`Graph visualization failed: ${msg}`)
+                vscode.window.showErrorMessage(`Visualization failed: ${msg}`)
+            }
+        }),
     );
 
     context.subscriptions.push(
@@ -360,12 +424,6 @@ export async function activate(context: vscode.ExtensionContext) {
             }
         }
     }
-
-    // Register Query Plan Visualization Panel
-    registerQueryPlanPanel(context);
-
-    // Register Time Series Analytics Panel
-    registerTimeSeriesPanel(context);
 
     outputChannel.appendLine('Geode GQL extension activated successfully');
 }
@@ -930,56 +988,6 @@ async function executeQuery(statement: string): Promise<void> {
     }
 }
 
-/**
- * Extract graph data (nodes and edges) from query result rows
- */
-function extractGraphData(rows: any[]): GraphData | null {
-    const nodes: Map<string | number, GraphNode> = new Map();
-    const edges: GraphEdge[] = [];
-
-    for (const row of rows) {
-        for (const key of Object.keys(row)) {
-            const value = row[key];
-            if (!value || typeof value !== 'object') {
-                continue;
-            }
-
-            // Check if it's a node (has _labels or labels property)
-            if (value._labels || value.labels || value._id !== undefined) {
-                const nodeId = value._id ?? value.id ?? `node-${nodes.size}`;
-                if (!nodes.has(nodeId)) {
-                    nodes.set(nodeId, {
-                        id: nodeId,
-                        labels: value._labels || value.labels || [],
-                        properties: value.properties || value
-                    });
-                }
-            }
-
-            // Check if it's a relationship/edge (has _type or type and _start/_end)
-            if ((value._type || value.type) && (value._start !== undefined || value._end !== undefined || value.source !== undefined || value.target !== undefined)) {
-                const edgeId = value._id ?? value.id ?? `edge-${edges.length}`;
-                edges.push({
-                    id: edgeId,
-                    source: value._start ?? value.source ?? value.startNodeId,
-                    target: value._end ?? value.target ?? value.endNodeId,
-                    type: value._type || value.type,
-                    properties: value.properties || value
-                });
-            }
-        }
-    }
-
-    if (nodes.size === 0 && edges.length === 0) {
-        return null;
-    }
-
-    return {
-        nodes: Array.from(nodes.values()),
-        edges: edges
-    };
-}
-
 function runGeodeQuery(query: string, host: string, port: number, timeout: number): Promise<string> {
     return new Promise((resolve, reject) => {
         const config = vscode.workspace.getConfiguration('geode');
@@ -1294,242 +1302,6 @@ function getDocumentationHtml(): string {
     </ul>
 </body>
 </html>`;
-}
-
-// ============================================================================
-// Status Bar
-// ============================================================================
-
-// ============================================================================
-// Graph Visualization
-// ============================================================================
-
-/**
- * Show the graph visualization panel
- */
-function showGraphVisualization(): GraphVisualizationPanel {
-    const panel = GraphVisualizationPanel.createOrShow({
-        extensionUri: extensionContext.extensionUri,
-        viewColumn: vscode.ViewColumn.Two
-    });
-
-    panel.setOutputChannel(outputChannel);
-
-    // Set up expand callback to query neighbors
-    panel.setExpandCallback(async (nodeId: string, labels: string[], depth: number): Promise<GraphElements | null> => {
-        const client = connectionManager.getClient();
-        if (!client.isConnected()) {
-            vscode.window.showWarningMessage('Not connected to database');
-            return null;
-        }
-
-        try {
-            const query = buildExpandQuery(nodeId, labels, depth);
-            outputChannel.appendLine(`[GraphViz] Expanding node ${nodeId}: ${query}`);
-
-            const result = await client.query(query);
-            const rows = await result.toObjects();
-
-            // Convert rows to graph elements
-            return extractGraphElements(rows);
-        } catch (error: any) {
-            outputChannel.appendLine(`[GraphViz] Expand error: ${error.message}`);
-            return null;
-        }
-    });
-
-    // Set up query related callback
-    panel.setQueryRelatedCallback(async (nodeId: string, relationshipType?: string): Promise<GraphElements | null> => {
-        const client = connectionManager.getClient();
-        if (!client.isConnected()) {
-            vscode.window.showWarningMessage('Not connected to database');
-            return null;
-        }
-
-        try {
-            const query = buildRelatedQuery(nodeId, relationshipType);
-            outputChannel.appendLine(`[GraphViz] Querying related for ${nodeId}: ${query}`);
-
-            const result = await client.query(query);
-            const rows = await result.toObjects();
-
-            return extractGraphElements(rows);
-        } catch (error: any) {
-            outputChannel.appendLine(`[GraphViz] Query related error: ${error.message}`);
-            return null;
-        }
-    });
-
-    return panel;
-}
-
-/**
- * Execute the current query and show results as graph visualization
- */
-async function visualizeQueryAsGraph(): Promise<void> {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-        vscode.window.showWarningMessage('No active editor');
-        return;
-    }
-
-    const selection = editor.selection;
-    const query = selection.isEmpty
-        ? editor.document.getText()
-        : editor.document.getText(selection);
-
-    if (!query.trim()) {
-        vscode.window.showWarningMessage('No query to visualize');
-        return;
-    }
-
-    const client = connectionManager.getClient();
-
-    if (!client.isConnected()) {
-        // Try to connect first
-        const profiles = connectionManager.getProfiles();
-        if (profiles.length === 0) {
-            vscode.window.showWarningMessage('No connections configured. Add a connection first.');
-            return;
-        }
-
-        const items = profiles.map(p => ({
-            label: p.name,
-            description: `${p.host}:${p.port}`,
-            profile: p
-        }));
-
-        const selected = await vscode.window.showQuickPick(items, {
-            placeHolder: 'Select a connection to visualize graph data'
-        });
-
-        if (!selected) {
-            return;
-        }
-
-        try {
-            await connectionManager.connect(selected.profile.id);
-        } catch (error: any) {
-            vscode.window.showErrorMessage(`Failed to connect: ${error.message}`);
-            return;
-        }
-    }
-
-    outputChannel.appendLine(`\n--- Visualizing Query as Graph ---`);
-    outputChannel.appendLine(query);
-
-    try {
-        const startTime = Date.now();
-        const result = await client.query(query);
-        const duration = Date.now() - startTime;
-        const rows = await result.toObjects();
-
-        outputChannel.appendLine(`Query completed in ${duration}ms, ${rows.length} rows`);
-
-        // Extract graph elements
-        const elements = extractGraphElements(rows);
-
-        if (elements.nodes.length === 0 && elements.edges.length === 0) {
-            outputChannel.appendLine('Query returned no graph data (nodes or relationships). Use Run File for tabular results.');
-            vscode.window.showInformationMessage(
-                'Query returned no graph data (nodes or relationships). Use "Run File" to view results in the React results panel.'
-            );
-            return;
-        }
-
-        // Show graph visualization
-        const graphPanel = showGraphVisualization();
-        graphPanel.loadElements({
-            nodes: elements.nodes.map(n => ({ data: n })),
-            edges: elements.edges.map(e => ({ data: e }))
-        }, query);
-
-        // Record in history via REST API
-        if (serverClient) {
-            void serverClient.request('/api/v1/history', 'POST', JSON.stringify({
-                query: query,
-                timestamp: Date.now(),
-                duration: duration,
-                rowCount: rows.length,
-                connectionName: connectionManager.getActiveProfile()?.name,
-                success: true,
-            })).catch(() => undefined);
-        }
-
-        vscode.window.showInformationMessage(
-            `Graph: ${elements.nodes.length} nodes, ${elements.edges.length} edges (${duration}ms)`
-        );
-
-    } catch (error: any) {
-        outputChannel.appendLine(`Visualization error: ${error.message}`);
-        vscode.window.showErrorMessage(`Visualization failed: ${error.message}`);
-    }
-}
-
-/**
- * Extract graph elements from query result rows
- */
-function extractGraphElements(rows: any[]): { nodes: any[]; edges: any[] } {
-    const nodes: Map<string, any> = new Map();
-    const edges: any[] = [];
-
-    for (const row of rows) {
-        for (const key of Object.keys(row)) {
-            const value = row[key];
-            if (!value || typeof value !== 'object') {
-                continue;
-            }
-
-            // Handle arrays (e.g., paths with multiple relationships)
-            if (Array.isArray(value)) {
-                for (const item of value) {
-                    processGraphItem(item, nodes, edges);
-                }
-            } else {
-                processGraphItem(value, nodes, edges);
-            }
-        }
-    }
-
-    return {
-        nodes: Array.from(nodes.values()),
-        edges: edges
-    };
-}
-
-/**
- * Process a single item that might be a node or edge
- */
-function processGraphItem(value: any, nodes: Map<string, any>, edges: any[]): void {
-    if (!value || typeof value !== 'object') {
-        return;
-    }
-
-    // Check if it's a node (has _labels or labels property)
-    if (value._labels || value.labels || (value._id !== undefined && value._start === undefined)) {
-        const nodeId = String(value._id ?? value.id ?? `node-${nodes.size}`);
-        if (!nodes.has(nodeId)) {
-            nodes.set(nodeId, {
-                id: nodeId,
-                labels: value._labels || value.labels || [],
-                properties: value.properties || value
-            });
-        }
-    }
-
-    // Check if it's a relationship/edge (has _type or type and _start/_end)
-    if ((value._type || value.type) &&
-        (value._start !== undefined || value._end !== undefined ||
-         value.source !== undefined || value.target !== undefined)) {
-        const edgeId = String(value._id ?? value.id ?? `edge-${edges.length}`);
-        edges.push({
-            id: edgeId,
-            source: String(value._start ?? value.source ?? value.startNodeId),
-            target: String(value._end ?? value.target ?? value.endNodeId),
-            type: value._type || value.type,
-            properties: value.properties || value
-        });
-    }
 }
 
 // ============================================================================
