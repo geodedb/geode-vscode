@@ -1,49 +1,70 @@
-# Pre-commit configuration for Geode VS Code Extension
+# Pre-commit configuration for the Geode VS Code extension.
 # https://pre-commit.com/
 #
-# Install: pip install pre-commit && pre-commit install
+# Install: pip install pre-commit && pre-commit install --install-hooks
+# Install push hooks too: pre-commit install --hook-type pre-push --install-hooks
 # Run manually: pre-commit run --all-files
-# Update hooks: pre-commit autoupdate
+# Update hook versions: pre-commit autoupdate
+#
+# Design intent: every CI failure should be reproducible locally. Hooks are
+# organised in two tiers:
+#
+#   pre-commit  — fast checks (<5 s typical) run on the staged diff.
+#   pre-push    — heavier checks (compile, unit tests, CI sim) run once
+#                 before code leaves the developer's machine. CI is the
+#                 backstop, not the first line of defence.
 
 default_stages: [pre-commit]
 fail_fast: false
+minimum_pre_commit_version: "3.0.0"
 
 repos:
   # =============================================================================
-  # Standard pre-commit hooks (best practices)
+  # Standard hygiene (https://github.com/pre-commit/pre-commit-hooks)
   # =============================================================================
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
-      # Formatting
+      # Whitespace + EOL
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
-        exclude: ^(node_modules/|out/|dist/)
+        exclude: ^(node_modules/|out/|dist/|\.vscode-test/|resources/(bin|webview)/)
       - id: end-of-file-fixer
-        exclude: ^(node_modules/|out/|dist/|.*\.vsix$)
+        exclude: ^(node_modules/|out/|dist/|\.vscode-test/|resources/(bin|webview)/|.*\.vsix$)
       - id: mixed-line-ending
         args: [--fix=lf]
-        exclude: ^(node_modules/|out/|dist/)
+        exclude: ^(node_modules/|out/|dist/|\.vscode-test/|resources/(bin|webview)/)
+
+      # Encoding consistency (UTF-8 BOM rejection)
+      - id: fix-byte-order-marker
 
       # Syntax validation
       - id: check-yaml
-        exclude: ^(node_modules/)
+        args: [--allow-multiple-documents]
+        exclude: ^(node_modules/|\.vscode-test/)
       - id: check-json
-        exclude: ^(node_modules/)
+        exclude: ^(node_modules/|\.vscode-test/|tsconfig.*\.json$)
       - id: check-toml
 
-      # Security
+      # Security and safety
       - id: detect-private-key
-        exclude: ^(certs/|test.*certs/)
+        exclude: ^(certs/|test.*certs/|\.vscode-test/)
       - id: check-added-large-files
         args: [--maxkb=1024]
-        exclude: ^(node_modules/)
+        exclude: ^(node_modules/|resources/(bin|webview)/|\.vscode-test/)
 
       # Git hygiene
       - id: check-merge-conflict
       - id: check-case-conflict
       - id: check-symlinks
       - id: destroyed-symlinks
+
+      # Executable bit consistency
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+
+      # File size enforcement above the regex exclusion above
+      - id: forbid-submodules
 
   # =============================================================================
   # Secret scanning (Issue #54)
@@ -61,7 +82,17 @@ repos:
     hooks:
       - id: markdownlint
         args: [--fix, --disable, MD013, MD033, MD041, MD024, --]
-        exclude: ^(node_modules/|CHANGELOG\.md)
+        exclude: ^(node_modules/|CHANGELOG\.md|docs/superpowers/plans/|\.vscode-test/)
+
+  # =============================================================================
+  # Shell-script lint for everything under scripts/
+  # =============================================================================
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        files: \.(sh|bash)$
+        exclude: ^(node_modules/|\.vscode-test/)
 
   # =============================================================================
   # Commit message validation (Conventional Commits)
@@ -73,68 +104,147 @@ repos:
         stages: [commit-msg]
 
   # =============================================================================
-  # Local/Custom hooks for TypeScript and Version Verification
+  # Local / custom hooks
   # =============================================================================
   - repo: local
     hooks:
-      # TypeScript compilation check
+      # ---------------------------------------------------------------------
+      # Fast commit-time checks
+      # ---------------------------------------------------------------------
+
+      # TypeScript compile (extension)
       - id: tsc-check
-        name: TypeScript compile
-        entry: npm run compile
+        name: TypeScript compile (src/)
+        entry: bash -c 'npm run compile >/dev/null'
         language: system
-        files: \.ts$
-        exclude: ^(node_modules/)
+        files: ^(src/.*\.ts|tsconfig\.json)$
         pass_filenames: false
 
-      # ESLint check
+      # TypeScript compile (e2e harness)
+      - id: tsc-check-e2e
+        name: TypeScript compile (e2e/)
+        entry: bash -c 'npm run compile:e2e >/dev/null'
+        language: system
+        files: ^(e2e/.*\.ts|e2e/tsconfig\.json)$
+        pass_filenames: false
+
+      # ESLint
       - id: eslint
         name: ESLint
-        entry: npm run lint
+        entry: bash -c 'npm run lint >/dev/null'
         language: system
-        files: \.ts$
-        exclude: ^(node_modules/)
+        files: ^src/.*\.ts$
         pass_filenames: false
 
-      # Unit tests (on push only - may be slow)
+      # package.json sanity — must be valid JSON AND parseable by Node
+      - id: package-json-parse
+        name: package.json validates
+        entry: bash -c 'node -e "JSON.parse(require(\"fs\").readFileSync(\"package.json\", \"utf8\"))"'
+        language: system
+        files: ^package\.json$
+        pass_filenames: false
+
+      # geode-ui.lock.json must parse — broken lock file fails the registry fetch in CI
+      - id: lock-file-parse
+        name: geode-ui.lock.json validates
+        entry: bash -c 'node -e "JSON.parse(require(\"fs\").readFileSync(\"geode-ui.lock.json\", \"utf8\"))"'
+        language: system
+        files: ^geode-ui\.lock\.json$
+        pass_filenames: false
+
+      # ---------------------------------------------------------------------
+      # Slower pre-push checks — run once before code leaves the machine
+      # ---------------------------------------------------------------------
+
+      # Full unit test suite
       - id: npm-test
         name: npm test
-        entry: npm test
+        entry: bash -c 'npm test'
         language: system
-        files: \.ts$
-        exclude: ^(node_modules/)
         pass_filenames: false
         stages: [pre-push]
 
-      # Version tag verification (on push only)
+      # Version tag verification
       - id: version-tag-check
-        name: version matches git tag
+        name: package.json version matches latest git tag
         entry: scripts/verify-version.sh
         language: script
         pass_filenames: false
         stages: [pre-push]
 
-      # Check for TODO/FIXME in committed code (warning, non-blocking)
-      # SECURITY: Fixed to properly report findings (Issue #58)
-      - id: check-todos
-        name: check for TODOs/FIXMEs
+      # CI build simulation: catch the exact failure mode that breaks CI when
+      # someone forgets that `npm run package` is dev-only (it requires
+      # ../geode-ui or registry env vars). The branch-build path in
+      # .gitlab-ci.yml runs `npm ci && npm run compile`; mirror that here so
+      # a broken compile cannot leave the laptop.
+      - id: ci-build-sim
+        name: CI build simulation (npm ci dry-run + compile)
+        entry: bash -c 'npm ls --silent --depth=0 >/dev/null && npm run compile >/dev/null && npm run compile:e2e >/dev/null'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      # npm audit — moderate+ vulnerabilities block push, low informational.
+      # `npm audit --omit=dev` filters out devDeps so prod-only deps are gated.
+      - id: npm-audit
+        name: npm audit (production deps)
+        entry: bash -c 'npm audit --omit=dev --audit-level=moderate'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      # Forbid `npm run package` from being invoked in CI branch builds. The
+      # script chains `prepackage` which requires either a sibling repo or
+      # registry credentials neither of which exist in branch CI. Catch any
+      # accidental reintroduction of that pattern in .gitlab-ci.yml.
+      - id: forbid-prepackage-in-branch-ci
+        name: branch-build CI must not run `npm run package`
         entry: bash
         args:
           - -c
           - |
-            files=$(git diff --cached --name-only 2>/dev/null)
+            if [ ! -f .gitlab-ci.yml ]; then exit 0; fi
+            # Look for `npm run package` ANYWHERE inside the top-level build:
+            # job. False positives in matrix package:<slug> jobs are filtered
+            # by anchoring on the standalone job name.
+            awk '
+              /^build:/ { in_build = 1; next }
+              /^[a-zA-Z_.][a-zA-Z0-9_.-]*:/ && in_build { in_build = 0 }
+              in_build && /npm run package/ { found = 1; line = NR; }
+              END { if (found) { print "ERROR: .gitlab-ci.yml `build` job invokes `npm run package` at line " line " — this requires ../geode-ui or registry creds and breaks branch CI."; exit 1 } }
+            ' .gitlab-ci.yml
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      # ---------------------------------------------------------------------
+      # Advisory checks — never block, but surface signals
+      # ---------------------------------------------------------------------
+
+      # TODO/FIXME scan on the staged diff (advisory)
+      - id: check-todos
+        name: check for TODOs/FIXMEs (advisory)
+        entry: bash
+        args:
+          - -c
+          - |
+            files=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null)
             if [ -z "$files" ]; then exit 0; fi
-            matches=$(echo "$files" | xargs grep -l -E "(TODO|FIXME|XXX|HACK)" 2>/dev/null || true)
+            # Only check text files we own (skip node_modules, generated, locks)
+            text_files=$(echo "$files" | grep -E '\.(ts|tsx|js|mjs|json|md|yaml|yml|sh)$' | grep -vE '^(node_modules/|out/|dist/|package-lock\.json|geode-ui\.lock\.json|\.vscode-test/)' || true)
+            if [ -z "$text_files" ]; then exit 0; fi
+            matches=$(echo "$text_files" | xargs grep -l -E "(TODO|FIXME|XXX|HACK)" 2>/dev/null || true)
             if [ -n "$matches" ]; then
-              echo "Warning: Found TODO/FIXME markers in staged files:"
+              echo "Advisory: TODO/FIXME/XXX/HACK markers in staged files:"
               echo "$matches"
-              exit 0
             fi
+            exit 0
         language: system
         pass_filenames: false
         verbose: true
 
 # =============================================================================
-# CI configuration
+# CI configuration (pre-commit.ci hosted runner)
 # =============================================================================
 ci:
   autofix_prs: true
@@ -145,5 +255,16 @@ ci:
   autoupdate_branch: ''
   autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
   autoupdate_schedule: weekly
-  skip: [tsc-check, eslint, npm-test, version-tag-check]
+  # Skip the local node-dependent hooks on the hosted CI runner.
+  skip:
+    - tsc-check
+    - tsc-check-e2e
+    - eslint
+    - package-json-parse
+    - lock-file-parse
+    - npm-test
+    - version-tag-check
+    - ci-build-sim
+    - npm-audit
+    - forbid-prepackage-in-branch-ci
   submodules: false

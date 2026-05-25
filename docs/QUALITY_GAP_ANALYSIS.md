@@ -42,6 +42,7 @@
 ### #60: Dual Connection Management (L effort)
 
 The old `ConnectionManager` provides `registerConnectionsView()` and `ConnectionsTreeProvider` which power the connections sidebar UI. The `EnhancedConnectionManager` does not have its own UI component. Migration requires:
+
 1. Extract `warnIfInsecure()` to shared utility
 2. Build new ConnectionsTreeProvider for EnhancedConnectionManager
 3. Migrate all UI interactions

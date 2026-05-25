@@ -37,7 +37,7 @@
 | 24 | SEC-0034 Insecure TLS scope | Medium | 20 | CWE-295 | **Closed** | scope: machine + security warning in description |
 | 25 | SEC-0022 Gitleaks excludes source | Medium | 20 | CWE-522 | **Closed** | .gitleaks.toml does not exclude source files |
 | 26 | SEC-0037 Floating CI components | Medium | 20 | CWE-1104 | **Closed** | Pinned component versions + image digests |
-| 27 | SEC-0020 CI lint/test ignored | Medium | 20 | CWE-684 | **Closed** | Removed || true; CI shares build artifacts |
+| 27 | SEC-0020 CI lint/test ignored | Medium | 20 | CWE-684 | **Closed** | Removed `\|\| true`; CI shares build artifacts |
 | 28 | SEC-0057 CSP broad unpkg.com | Low | 16 | CWE-16 | **Mitigated** | SRI integrity attrs pin exact scripts; nonce-gated |
 | 29 | SEC-0040 MCP logs full args | Low | 12 | CWE-532 | **Closed** | redactSensitiveArgs before logging |
 | 30 | SEC-0058 check-todos exits 0 | Low | 12 | CWE-684 | **Closed** | Fixed exit logic |
@@ -85,6 +85,7 @@
 ### Shared Security Utilities (`src/utils/security.ts`)
 
 Consolidated 17+ duplicate implementations into a single module:
+
 - `escapeHtml()` — null-safe, all 5 HTML chars including quotes
 - `getNonce()` — crypto.randomBytes instead of Math.random
 - `sanitizeIdentifier()` — GQL identifier validation (dual mode: strict/lenient)

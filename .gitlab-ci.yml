@@ -46,6 +46,13 @@ stages:
 # SECURITY: Issue #37 - Use image digests for reproducible builds
 # NOTE: Update these digests periodically from official Node.js images
 # Get digest with: docker pull node:20-alpine && docker inspect --format='{{.RepoDigests}}' node:20-alpine
+#
+# Branch builds compile the TypeScript and ship the transpiled tree as an
+# artifact for downstream lint/test. They do NOT run `npm run package` —
+# packaging requires `prepackage` to fetch the geode-ui SPA + bundled
+# binaries (either from a sibling working copy in dev or from the GitLab
+# Generic Package Registry in CI). Per-platform packaging happens on tag
+# pipelines via the `package:<slug>` matrix below.
 build:
   stage: build
   image: node:20-alpine@sha256:2d5e8a8a51bc341fd5f2eed6d91455c3a3d147e91a14298fc564b5dc519c1666
@@ -54,11 +61,8 @@ build:
   script:
     - npm ci
     - npm run compile
-    - npm run package
-    - ls -la *.vsix
   artifacts:
     paths:
-      - "*.vsix"
       - out/
       - node_modules/
     expire_in: 1 week
@@ -152,16 +156,27 @@ package:win32-x64:
 # =============================================================================
 # Publish to VS Code Marketplace
 # =============================================================================
-# Retrieves VSCE PAT from Vault at devnw/geode/vsce (field: pat)
-# Uses script-based JWT auth matching the ci-catalog vault-auth pattern
+# Retrieves VSCE PAT from Vault at devnw/geode/vsce (field: pat).
+# Uses script-based JWT auth matching the ci-catalog vault-auth pattern.
+#
+# Tag pipelines only. Pulls the per-platform VSIX artifacts produced by
+# `package:<slug>` matrix jobs and publishes each one — vsce publishes
+# platform-specific extensions by inspecting the embedded `targetPlatform`
+# field in the package metadata.
 publish-marketplace:
   stage: publish
   image: node:20-alpine@sha256:2d5e8a8a51bc341fd5f2eed6d91455c3a3d147e91a14298fc564b5dc519c1666
   needs:
-    - job: build
+    - job: package:linux-x64
       artifacts: true
-    - job: lint
-    - job: test
+    - job: package:linux-arm64
+      artifacts: true
+    - job: package:darwin-x64
+      artifacts: true
+    - job: package:darwin-arm64
+      artifacts: true
+    - job: package:win32-x64
+      artifacts: true
   id_tokens:
     VAULT_ID_TOKEN:
       aud: https://pki.devnw.com
@@ -201,8 +216,19 @@ publish-marketplace:
       fi
       echo "VSCE PAT retrieved successfully"
 
-      # Publish to VS Code Marketplace
-      npx vsce publish --skip-license -p "$VSCE_PAT"
+      # Publish each per-platform VSIX to the VS Code Marketplace.
+      shopt -s nullglob
+      published=0
+      for vsix in *.vsix; do
+        echo "Publishing ${vsix}..."
+        npx vsce publish --packagePath "${vsix}" --skip-license -p "$VSCE_PAT"
+        published=$((published + 1))
+      done
+      if [ "$published" -eq 0 ]; then
+        echo "ERROR: no VSIX artifacts found to publish"
+        exit 1
+      fi
+      echo "Published ${published} VSIX file(s) to Marketplace"
   environment:
     name: vscode-marketplace
     url: https://marketplace.visualstudio.com/items?itemName=codeprosorg.geode-vscode
@@ -214,16 +240,22 @@ publish-marketplace:
 # =============================================================================
 # Publish to Open VSX Registry
 # =============================================================================
-# Retrieves Open VSX PAT from Vault at devnw/geode/openvsx (field: pat)
-# Uses script-based JWT auth matching the ci-catalog vault-auth pattern
+# Retrieves Open VSX PAT from Vault at devnw/geode/openvsx (field: pat).
+# Uses script-based JWT auth matching the ci-catalog vault-auth pattern.
 publish-openvsx:
   stage: publish
   image: node:20-alpine@sha256:2d5e8a8a51bc341fd5f2eed6d91455c3a3d147e91a14298fc564b5dc519c1666
   needs:
-    - job: build
+    - job: package:linux-x64
       artifacts: true
-    - job: lint
-    - job: test
+    - job: package:linux-arm64
+      artifacts: true
+    - job: package:darwin-x64
+      artifacts: true
+    - job: package:darwin-arm64
+      artifacts: true
+    - job: package:win32-x64
+      artifacts: true
   id_tokens:
     VAULT_ID_TOKEN:
       aud: https://pki.devnw.com
@@ -266,9 +298,19 @@ publish-openvsx:
       # Ensure publisher namespace exists (idempotent)
       npx ovsx create-namespace codeprosorg -p "$OVSX_PAT" || true
 
-      # Publish to Open VSX Registry
-      VSIX_FILE=$(ls *.vsix | head -1)
-      npx ovsx publish "$VSIX_FILE" -p "$OVSX_PAT"
+      # Publish each per-platform VSIX to Open VSX.
+      shopt -s nullglob
+      published=0
+      for vsix in *.vsix; do
+        echo "Publishing ${vsix}..."
+        npx ovsx publish "${vsix}" -p "$OVSX_PAT"
+        published=$((published + 1))
+      done
+      if [ "$published" -eq 0 ]; then
+        echo "ERROR: no VSIX artifacts found to publish"
+        exit 1
+      fi
+      echo "Published ${published} VSIX file(s) to Open VSX"
   environment:
     name: open-vsx
     url: https://open-vsx.org/extension/codeprosorg/geode-vscode
@@ -277,22 +319,39 @@ publish-openvsx:
       when: on_success
     - when: never
 
-# Upload .vsix to GitLab Generic Package Registry as backup
+# Upload each per-platform .vsix to the GitLab Generic Package Registry as a
+# durable artifact alongside the GitLab Release page.
 publish-gitlab:
   stage: publish
   image: curlimages/curl:latest
   needs:
-    - job: build
+    - job: package:linux-x64
       artifacts: true
-    - job: lint
-    - job: test
+    - job: package:linux-arm64
+      artifacts: true
+    - job: package:darwin-x64
+      artifacts: true
+    - job: package:darwin-arm64
+      artifacts: true
+    - job: package:win32-x64
+      artifacts: true
   script:
     - |
-      VSIX_FILE=$(ls *.vsix | head -1)
-      echo "Uploading ${VSIX_FILE} to GitLab Package Registry..."
-      curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
-           --upload-file "${VSIX_FILE}" \
-           "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/geode-vscode/${CI_COMMIT_TAG}/${VSIX_FILE}"
+      set -eu
+      uploaded=0
+      for vsix in *.vsix; do
+        [ -f "${vsix}" ] || continue
+        echo "Uploading ${vsix} to GitLab Package Registry..."
+        curl --fail --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+             --upload-file "${vsix}" \
+             "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/geode-vscode/${CI_COMMIT_TAG}/${vsix}"
+        uploaded=$((uploaded + 1))
+      done
+      if [ "$uploaded" -eq 0 ]; then
+        echo "ERROR: no VSIX artifacts found to upload"
+        exit 1
+      fi
+      echo "Uploaded ${uploaded} VSIX file(s)"
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$/'
       when: on_success
