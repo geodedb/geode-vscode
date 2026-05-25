@@ -1,5 +1,5 @@
 import { strict as assert } from 'assert'
-import { createConnectionsHandlers, ConnectionsDeps } from '../../sidebar/ConnectionsHandler'
+import { createConnectionsHandlers } from '../../sidebar/ConnectionsHandler'
 
 class FakeSecrets {
     store = new Map<string, string>()
