@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-05-25
+
+### Fixed
+
+- Branch CI no longer runs `npm run package` (which requires sibling
+  repos or registry creds not present in the build environment).
+- Per-platform `package:<slug>` matrix now fetches goreleaser-emitted
+  binaries from the GitLab Generic Package Registry with SHA256
+  verification against the published `checksums.txt`.
+- `package:win32-x64` removed from the matrix until upstream geode
+  publishes a Windows binary.
+- Publish jobs (`publish-marketplace`, `publish-openvsx`,
+  `publish-gitlab`) now loop over every per-platform VSIX instead of
+  picking the first one with `ls *.vsix | head -1`.
+
+### Added
+
+- `scripts/fetch-release-assets.mjs` - builds the geode-ui SPA from a
+  pinned tag and fetches verified per-platform binaries.
+- Enterprise-grade pre-commit hook suite: shellcheck, executable-bit
+  consistency, BOM rejection, submodule ban, package.json + lock-file
+  JSON validation, e2e TypeScript compile, CI build simulation on
+  push, npm audit on production deps, and a static check that fails
+  push if `.gitlab-ci.yml` reintroduces the branch-build packaging
+  regression.
+
 ## [1.3.0] - 2026-05-25
 
 ### Added

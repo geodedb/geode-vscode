@@ -91,11 +91,18 @@ test:
     - if: '$CI_COMMIT_TAG'
 
 # =============================================================================
-# Per-platform VSIX packaging (registry mode)
+# Per-platform VSIX packaging
 # =============================================================================
-# These jobs download pre-built binaries from the registry, then produce a
-# platform-specific .vsix using vsce --target.  They only run on tags so that
-# branch pipelines skip the binary download overhead.
+# Tag pipelines only. Each job:
+#   1. Builds the geode-ui SPA from a sibling checkout at SPA_VERSION
+#   2. Downloads the goreleaser-emitted geode-ui + geode binary tarballs
+#      from the GitLab Generic Package Registry for the matching slug
+#   3. Verifies each tarball against the published checksums.txt
+#   4. Runs `vsce package --target <slug>`
+#
+# SPA_VERSION and GEODE_VERSION must be set as CI variables on the project
+# (or overridden per-tag). win32-x64 is intentionally absent — upstream
+# geode (the graph-DB) does not yet publish a Windows binary.
 .package-base: &package-base
   stage: package
   image: node:20
@@ -103,11 +110,12 @@ test:
     - job: lint
     - job: test
   before_script:
+    - apt-get update -qq && apt-get install -y -qq tar git
     - npm ci
   artifacts:
     paths:
       - "*.vsix"
-    expire_in: 1 week
+    expire_in: 1 month
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$/'
       when: on_success
@@ -116,42 +124,34 @@ test:
 package:linux-x64:
   <<: *package-base
   script:
-    - node scripts/fetch-geode-ui.mjs --source=registry --version="${SPA_VERSION}"
-    - node scripts/fetch-geode-binaries.mjs --source=registry --uiVersion="${UI_BIN_VERSION}" --geodeVersion="${DB_BIN_VERSION}" --targetPlatform=linux-x64
+    - node scripts/fetch-release-assets.mjs --spaVersion="${SPA_VERSION}" --geodeVersion="${GEODE_VERSION}" --targetPlatform=linux-x64
+    - node scripts/collect-bundled-licenses.mjs || true
     - npm run compile
     - npx vsce package --target linux-x64 --skip-license --out geode-vscode-${CI_COMMIT_TAG}-linux-x64.vsix
 
 package:linux-arm64:
   <<: *package-base
   script:
-    - node scripts/fetch-geode-ui.mjs --source=registry --version="${SPA_VERSION}"
-    - node scripts/fetch-geode-binaries.mjs --source=registry --uiVersion="${UI_BIN_VERSION}" --geodeVersion="${DB_BIN_VERSION}" --targetPlatform=linux-arm64
+    - node scripts/fetch-release-assets.mjs --spaVersion="${SPA_VERSION}" --geodeVersion="${GEODE_VERSION}" --targetPlatform=linux-arm64
+    - node scripts/collect-bundled-licenses.mjs || true
     - npm run compile
     - npx vsce package --target linux-arm64 --skip-license --out geode-vscode-${CI_COMMIT_TAG}-linux-arm64.vsix
 
 package:darwin-x64:
   <<: *package-base
   script:
-    - node scripts/fetch-geode-ui.mjs --source=registry --version="${SPA_VERSION}"
-    - node scripts/fetch-geode-binaries.mjs --source=registry --uiVersion="${UI_BIN_VERSION}" --geodeVersion="${DB_BIN_VERSION}" --targetPlatform=darwin-x64
+    - node scripts/fetch-release-assets.mjs --spaVersion="${SPA_VERSION}" --geodeVersion="${GEODE_VERSION}" --targetPlatform=darwin-x64
+    - node scripts/collect-bundled-licenses.mjs || true
     - npm run compile
     - npx vsce package --target darwin-x64 --skip-license --out geode-vscode-${CI_COMMIT_TAG}-darwin-x64.vsix
 
 package:darwin-arm64:
   <<: *package-base
   script:
-    - node scripts/fetch-geode-ui.mjs --source=registry --version="${SPA_VERSION}"
-    - node scripts/fetch-geode-binaries.mjs --source=registry --uiVersion="${UI_BIN_VERSION}" --geodeVersion="${DB_BIN_VERSION}" --targetPlatform=darwin-arm64
+    - node scripts/fetch-release-assets.mjs --spaVersion="${SPA_VERSION}" --geodeVersion="${GEODE_VERSION}" --targetPlatform=darwin-arm64
+    - node scripts/collect-bundled-licenses.mjs || true
     - npm run compile
     - npx vsce package --target darwin-arm64 --skip-license --out geode-vscode-${CI_COMMIT_TAG}-darwin-arm64.vsix
-
-package:win32-x64:
-  <<: *package-base
-  script:
-    - node scripts/fetch-geode-ui.mjs --source=registry --version="${SPA_VERSION}"
-    - node scripts/fetch-geode-binaries.mjs --source=registry --uiVersion="${UI_BIN_VERSION}" --geodeVersion="${DB_BIN_VERSION}" --targetPlatform=win32-x64
-    - npm run compile
-    - npx vsce package --target win32-x64 --skip-license --out geode-vscode-${CI_COMMIT_TAG}-win32-x64.vsix
 
 # =============================================================================
 # Publish to VS Code Marketplace
@@ -174,8 +174,6 @@ publish-marketplace:
     - job: package:darwin-x64
       artifacts: true
     - job: package:darwin-arm64
-      artifacts: true
-    - job: package:win32-x64
       artifacts: true
   id_tokens:
     VAULT_ID_TOKEN:
@@ -254,8 +252,6 @@ publish-openvsx:
       artifacts: true
     - job: package:darwin-arm64
       artifacts: true
-    - job: package:win32-x64
-      artifacts: true
   id_tokens:
     VAULT_ID_TOKEN:
       aud: https://pki.devnw.com
@@ -332,8 +328,6 @@ publish-gitlab:
     - job: package:darwin-x64
       artifacts: true
     - job: package:darwin-arm64
-      artifacts: true
-    - job: package:win32-x64
       artifacts: true
   script:
     - |

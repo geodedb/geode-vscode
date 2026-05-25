@@ -2,7 +2,7 @@
   "name": "geode-vscode",
   "displayName": "Geode for VS Code",
   "description": "Official VS Code extension for Geode graph database - GQL/Cypher syntax highlighting, LSP, query execution, and graph visualization",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "publisher": "codeprosorg",
   "author": "CodePros",
   "icon": "images/geode-icon.png",
@@ -486,7 +486,12 @@
         },
         "geode.bundledServer.logLevel": {
           "type": "string",
-          "enum": ["debug", "info", "warn", "error"],
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ],
           "default": "info",
           "description": "Log level passed to the bundled geode-ui server."
         },
