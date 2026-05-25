@@ -38,9 +38,6 @@ import { migrateLegacySavedQueries } from './sidebar/savedQueriesMigration';
 
 // New enhanced components
 import { EnhancedConnectionManager } from './client/EnhancedConnectionManager';
-import { EnhancedSchemaExplorerProvider } from './views/EnhancedSchemaExplorerProvider';
-import { QueryHistoryProvider } from './views/QueryHistoryProvider';
-import { SavedQueriesProvider } from './views/SavedQueriesProvider';
 import { GeodeMCPServer, registerMCPServer } from './mcp/GeodeMCPServer';
 import { isValidBinaryPath, DEFAULT_PORT, CONNECTION_TIMEOUT_MS, QUERY_TIMEOUT_MS, secureId } from './utils/security';
 import { GeodeServerProcess } from './server/GeodeServerProcess';
@@ -58,9 +55,7 @@ let statusBarItem: vscode.StatusBarItem;
 let outputChannel: vscode.OutputChannel;
 let connectionManager: EnhancedConnectionManager; // Using new manager
 let sidebarProvider: ReactWebviewViewProvider | undefined;
-let schemaExplorer: EnhancedSchemaExplorerProvider; // New schema explorer
-let queryHistoryProvider: QueryHistoryProvider; // Query history tracking
-let savedQueriesProvider: SavedQueriesProvider; // Saved queries management
+let serverClient: HttpServerClient | undefined;
 let _mcpServer: GeodeMCPServer; // MCP server for AI integration
 let isConnected = false;
 let extensionContext: vscode.ExtensionContext; // Store context for panel access
@@ -94,58 +89,19 @@ export async function activate(context: vscode.ExtensionContext) {
 
     outputChannel.appendLine('Enhanced connection manager initialized');
 
-    // Initialize enhanced schema explorer
-    schemaExplorer = new EnhancedSchemaExplorerProvider(
-        connectionManager.getClient(),
-        outputChannel
-    );
-
-    // Register schema explorer tree view
-    const schemaTreeView = vscode.window.createTreeView('geodeSchemaExplorer', {
-        treeDataProvider: schemaExplorer,
-        showCollapseAll: true
-    });
-    context.subscriptions.push(schemaTreeView);
-
-    outputChannel.appendLine('Enhanced schema explorer registered');
-
-    // Initialize query history provider
-    queryHistoryProvider = new QueryHistoryProvider(context);
-    const historyTreeView = vscode.window.createTreeView('geodeQueryHistory', {
-        treeDataProvider: queryHistoryProvider,
-        showCollapseAll: false
-    });
-    context.subscriptions.push(historyTreeView);
-    outputChannel.appendLine('Query history provider registered');
-
-    // Initialize saved queries provider
-    savedQueriesProvider = new SavedQueriesProvider(context);
-    const savedQueriesTreeView = vscode.window.createTreeView('geodeSavedQueries', {
-        treeDataProvider: savedQueriesProvider,
-        showCollapseAll: true
-    });
-    context.subscriptions.push(savedQueriesTreeView);
-    outputChannel.appendLine('Saved queries provider registered');
-
     // Initialize MCP server for AI assistant integration
     _mcpServer = registerMCPServer(context, connectionManager.getClient(), outputChannel);
     outputChannel.appendLine('MCP server registered');
 
-    // Listen to connection changes and refresh schema
+    // Listen to connection changes
     connectionManager.onDidChangeActiveConnection(profile => {
         if (profile) {
             isConnected = true;
             updateStatusBar('connected', profile as any); // Type assertion for compatibility
-            // Auto-refresh schema when connected
-            schemaExplorer.refresh().catch(err => {
-                outputChannel.appendLine(`Schema refresh failed: ${err}`);
-            });
         } else {
             isConnected = false;
             updateStatusBar('disconnected');
-            schemaExplorer.clear();
         }
-        // Update context for menu visibility
         vscode.commands.executeCommand('setContext', 'geode.hasActiveConnection', isConnected);
     });
 
@@ -172,7 +128,6 @@ export async function activate(context: vscode.ExtensionContext) {
         outputChannel.appendLine(`[geode] bundled server did not start: ${err}`);
     }
 
-    let serverClient: HttpServerClient | undefined;
     if (startedServerInfo) {
         queryRunner = new HttpQueryRunner({
             serverInfo: startedServerInfo,
@@ -949,25 +904,27 @@ async function executeQuery(statement: string): Promise<void> {
     try {
         const result = await queryRunner.run(statement);
         pushResults(panel, queryId, statement, result);
-        if (queryHistoryProvider) {
-            queryHistoryProvider.addEntry({
+        if (serverClient) {
+            void serverClient.request('/api/v1/history', 'POST', JSON.stringify({
                 query: statement,
+                timestamp: Date.now(),
                 duration: result.durationMs,
                 rowCount: result.rows.length,
                 connectionName: connectionManager.getActiveProfile()?.name,
                 success: true,
-            });
+            })).catch(() => undefined);
         }
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         outputChannel.appendLine(`Error: ${msg}`);
-        if (queryHistoryProvider) {
-            queryHistoryProvider.addEntry({
+        if (serverClient) {
+            void serverClient.request('/api/v1/history', 'POST', JSON.stringify({
                 query: statement,
+                timestamp: Date.now(),
                 connectionName: connectionManager.getActiveProfile()?.name,
                 success: false,
                 error: msg,
-            });
+            })).catch(() => undefined);
         }
         vscode.window.showErrorMessage(`Query failed: ${msg}`);
     }
@@ -1487,14 +1444,17 @@ async function visualizeQueryAsGraph(): Promise<void> {
             edges: elements.edges.map(e => ({ data: e }))
         }, query);
 
-        // Add to query history
-        queryHistoryProvider.addEntry({
-            query: query,
-            duration: duration,
-            rowCount: rows.length,
-            connectionName: connectionManager.getActiveProfile()?.name,
-            success: true
-        });
+        // Record in history via REST API
+        if (serverClient) {
+            void serverClient.request('/api/v1/history', 'POST', JSON.stringify({
+                query: query,
+                timestamp: Date.now(),
+                duration: duration,
+                rowCount: rows.length,
+                connectionName: connectionManager.getActiveProfile()?.name,
+                success: true,
+            })).catch(() => undefined);
+        }
 
         vscode.window.showInformationMessage(
             `Graph: ${elements.nodes.length} nodes, ${elements.edges.length} edges (${duration}ms)`
