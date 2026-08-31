@@ -2,30 +2,30 @@
 # This prevents supply chain attacks via malicious updates
 include:
   # Security scanning
-  - component: gitlab.com/devnw/ci-catalog/security-sast@v1.48.0
+  - component: gitlab.com/devnw/ci-catalog/security-sast@v1.49.1
     inputs:
       stage: security
 
-  - component: gitlab.com/devnw/ci-catalog/security-dependency-scanning@v1.48.0
+  - component: gitlab.com/devnw/ci-catalog/security-dependency-scanning@v1.49.1
     inputs:
       stage: security
 
-  - component: gitlab.com/devnw/ci-catalog/security-secrets@v1.48.0
+  - component: gitlab.com/devnw/ci-catalog/security-secrets@v1.49.1
     inputs:
       stage: security
 
-  - component: gitlab.com/devnw/ci-catalog/security-gitleaks@v1.48.0
+  - component: gitlab.com/devnw/ci-catalog/security-gitleaks@v1.49.1
 
   # SBOM generation and scanning
-  - component: gitlab.com/devnw/ci-catalog/sbom-generate@v1.48.0
+  - component: gitlab.com/devnw/ci-catalog/sbom-generate@v1.49.1
 
   # SECURITY: Issue #38 - Make SBOM scan blocking to enforce security policy
-  - component: gitlab.com/devnw/ci-catalog/sbom-scan@v1.48.0
+  - component: gitlab.com/devnw/ci-catalog/sbom-scan@v1.49.1
     inputs:
       allow_failure: false
 
   # Release creation
-  - component: gitlab.com/devnw/ci-catalog/release-semantic@v1.48.0
+  - component: gitlab.com/devnw/ci-catalog/release-semantic@v1.49.1
     inputs:
       stage: release
 
@@ -62,7 +62,7 @@ variables:
 # pipelines via the `package:<slug>` matrix below.
 build:
   stage: build
-  image: node:26-alpine@sha256:b4fea132199070b0c8ea9ac66f363fe2cd6d1e4f994e61d8c87976c2157a1b8a
+  image: node:26-alpine@sha256:ad6400dee476b06e82d0ee3a088e2d7555f6e6569c346e61d69e14d0f19e8c2b
   before_script:
     - apk add --no-cache make git
   script:
@@ -79,7 +79,7 @@ build:
 
 lint:
   stage: test
-  image: node:26-alpine@sha256:b4fea132199070b0c8ea9ac66f363fe2cd6d1e4f994e61d8c87976c2157a1b8a
+  image: node:26-alpine@sha256:ad6400dee476b06e82d0ee3a088e2d7555f6e6569c346e61d69e14d0f19e8c2b
   needs: [build]
   script:
     - npm run lint
@@ -89,7 +89,7 @@ lint:
 
 test:
   stage: test
-  image: node:26-alpine@sha256:b4fea132199070b0c8ea9ac66f363fe2cd6d1e4f994e61d8c87976c2157a1b8a
+  image: node:26-alpine@sha256:ad6400dee476b06e82d0ee3a088e2d7555f6e6569c346e61d69e14d0f19e8c2b
   needs: [build]
   script:
     - npm run test
@@ -172,7 +172,7 @@ package:darwin-arm64:
 # field in the package metadata.
 publish-marketplace:
   stage: publish
-  image: node:26-alpine@sha256:b4fea132199070b0c8ea9ac66f363fe2cd6d1e4f994e61d8c87976c2157a1b8a
+  image: node:26-alpine@sha256:ad6400dee476b06e82d0ee3a088e2d7555f6e6569c346e61d69e14d0f19e8c2b
   needs:
     - job: package:linux-x64
       artifacts: true
@@ -250,7 +250,7 @@ publish-marketplace:
 # Uses script-based JWT auth matching the ci-catalog vault-auth pattern.
 publish-openvsx:
   stage: publish
-  image: node:26-alpine@sha256:b4fea132199070b0c8ea9ac66f363fe2cd6d1e4f994e61d8c87976c2157a1b8a
+  image: node:26-alpine@sha256:ad6400dee476b06e82d0ee3a088e2d7555f6e6569c346e61d69e14d0f19e8c2b
   needs:
     - job: package:linux-x64
       artifacts: true
