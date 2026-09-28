@@ -574,7 +574,7 @@
   },
   "dependencies": {
     "vscode-languageclient": "^10.0.0",
-    "vscode-ws-jsonrpc": "^3.5.0",
+    "vscode-ws-jsonrpc": "^4.0.0",
     "ws": "^8.21.0"
   },
   "devDependencies": {
