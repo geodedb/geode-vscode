@@ -11,12 +11,13 @@ export interface WsTransportOpts {
 
 /**
  * Adapts a `ws.WebSocket` instance to the `IWebSocket` interface that
- * `vscode-ws-jsonrpc` v3 expects.  The library's `toSocket` helper targets
+ * `vscode-ws-jsonrpc` v4 expects.  The library's `toSocket` helper targets
  * the browser WebSocket shape (property-based event handlers), so we bridge
  * the Node `ws` event-emitter API manually.
  */
 function toIWebSocket(ws: WebSocket): IWebSocket {
     return {
+        $type: 'IWebSocket',
         send: (content: string) => ws.send(content),
         onMessage: (cb: (data: unknown) => void) => ws.on('message', cb),
         onError: (cb: (reason: unknown) => void) => ws.on('error', cb),

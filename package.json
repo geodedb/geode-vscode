@@ -573,26 +573,27 @@
     "prepackage": "npm run fetch:ui:local && npm run fetch:bin:local && node scripts/collect-bundled-licenses.mjs && npm run compile"
   },
   "dependencies": {
-    "vscode-languageclient": "^10.0.0",
-    "vscode-ws-jsonrpc": "^4.0.0",
-    "ws": "^8.21.0"
+    "vscode-languageclient": "^10.1.2",
+    "vscode-ws-jsonrpc": "^4.0.2",
+    "ws": "^8.22.0"
   },
   "devDependencies": {
     "@types/glob": "^9.0.0",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^26.0.0",
+    "@types/node": "^26.6.5",
     "@types/vscode": "^1.75.0",
-    "@types/ws": "^8.18.1",
-    "@typescript-eslint/eslint-plugin": "^8.54.0",
-    "@typescript-eslint/parser": "^8.54.0",
-    "@vscode/test-electron": "^3.0.0",
+    "@types/ws": "^8.18.2",
+    "@typescript-eslint/eslint-plugin": "^8.71.1",
+    "@typescript-eslint/parser": "^8.71.1",
+    "@typescript/native": "npm:typescript@^7.0.2",
+    "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^4.0.0",
     "c8": "^12.0.0",
-    "eslint": "^10.0.0",
-    "glob": "^13.0.0",
-    "mocha": "^12.0.0",
-    "tar": "^7.5.15",
-    "typescript": "^7.0.0"
+    "eslint": "^10.12.0",
+    "glob": "^13.0.6",
+    "mocha": "^12.0.3",
+    "tar": "^7.5.22",
+    "typescript": "npm:@typescript/typescript6@^6.0.2"
   },
   "overrides": {
     "diff": ">=8.0.3",
