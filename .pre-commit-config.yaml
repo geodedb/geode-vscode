@@ -88,7 +88,7 @@ repos:
   # Shell-script lint for everything under scripts/
   # =============================================================================
   - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.10.0.1
+    rev: v0.11.0.1
     hooks:
       - id: shellcheck
         files: \.(sh|bash)$
@@ -98,7 +98,7 @@ repos:
   # Commit message validation (Conventional Commits)
   # =============================================================================
   - repo: https://github.com/commitizen-tools/commitizen
-    rev: v4.19.0
+    rev: v4.19.2
     hooks:
       - id: commitizen
         stages: [commit-msg]

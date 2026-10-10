@@ -44,7 +44,7 @@ let serverProcess: GeodeServerProcess | undefined;
 let lspProcess: GeodeLspProcess | undefined;
 let serverInfo: { host: string; port: number; token: string } | undefined;
 let statusBarItem: vscode.StatusBarItem;
-let outputChannel: vscode.OutputChannel;
+let outputChannel: vscode.LogOutputChannel;
 let connectionManager: EnhancedConnectionManager; // Using new manager
 let sidebarProvider: ReactWebviewViewProvider | undefined;
 let serverClient: HttpServerClient | undefined;
@@ -69,7 +69,7 @@ async function ensureServerStarted(context: vscode.ExtensionContext, startupTime
 
 export async function activate(context: vscode.ExtensionContext) {
     extensionContext = context; // Store for later use
-    outputChannel = vscode.window.createOutputChannel('Geode GQL');
+    outputChannel = vscode.window.createOutputChannel('Geode GQL', { log: true });
     context.subscriptions.push(outputChannel);
 
     outputChannel.appendLine('Activating Geode GQL extension with enhanced components...');
