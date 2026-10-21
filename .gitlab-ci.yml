@@ -29,6 +29,12 @@ include:
     inputs:
       stage: release
 
+workflow:
+  # SRE-172: a newer commit on the same ref cancels the superseded pipeline's
+  # interruptible (validation) jobs. Release/deploy jobs stay non-interruptible.
+  auto_cancel:
+    on_new_commit: interruptible
+
 default:
   tags:
     - company
@@ -61,6 +67,7 @@ variables:
 # Generic Package Registry in CI). Per-platform packaging happens on tag
 # pipelines via the `package:<slug>` matrix below.
 build:
+  interruptible: true
   stage: build
   image: node:26-alpine@sha256:6f08a523443ddedf52941874c203475b0ad503e859ad70cb26ab8be9a517dbd5
   before_script:
@@ -78,6 +85,7 @@ build:
     - if: '$CI_COMMIT_TAG'
 
 lint:
+  interruptible: true
   stage: test
   image: node:26-alpine@sha256:6f08a523443ddedf52941874c203475b0ad503e859ad70cb26ab8be9a517dbd5
   needs: [build]
@@ -88,6 +96,7 @@ lint:
     - if: '$CI_COMMIT_TAG'
 
 test:
+  interruptible: true
   stage: test
   image: node:26-alpine@sha256:6f08a523443ddedf52941874c203475b0ad503e859ad70cb26ab8be9a517dbd5
   needs: [build]
@@ -111,6 +120,7 @@ test:
 # (or overridden per-tag). win32-x64 is intentionally absent — upstream
 # geode (the graph-DB) does not yet publish a Windows binary.
 .package-base: &package-base
+  interruptible: false
   stage: package
   image: node:26
   needs:
@@ -171,6 +181,7 @@ package:darwin-arm64:
 # platform-specific extensions by inspecting the embedded `targetPlatform`
 # field in the package metadata.
 publish-marketplace:
+  interruptible: false
   stage: publish
   image: node:26-alpine@sha256:6f08a523443ddedf52941874c203475b0ad503e859ad70cb26ab8be9a517dbd5
   needs:
@@ -249,6 +260,7 @@ publish-marketplace:
 # Retrieves Open VSX PAT from Vault at devnw/geode/openvsx (field: pat).
 # Uses script-based JWT auth matching the ci-catalog vault-auth pattern.
 publish-openvsx:
+  interruptible: false
   stage: publish
   image: node:26-alpine@sha256:6f08a523443ddedf52941874c203475b0ad503e859ad70cb26ab8be9a517dbd5
   needs:
@@ -327,6 +339,7 @@ publish-openvsx:
 # Upload each per-platform .vsix to the GitLab Generic Package Registry as a
 # durable artifact alongside the GitLab Release page.
 publish-gitlab:
+  interruptible: false
   stage: publish
   image: curlimages/curl:latest
   needs:
@@ -362,6 +375,7 @@ publish-gitlab:
 
 # Release must wait for publish to complete
 create-release:
+  interruptible: false
   needs:
     - job: publish-marketplace
       optional: false
