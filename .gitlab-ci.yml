@@ -18,6 +18,11 @@ include:
       stage: release
 
 workflow:
+  # An open MR owns push validation; other pipeline sources stay admitted.
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS'
+      when: never
+    - when: always
   # SRE-172: a newer commit on the same ref cancels the superseded pipeline's
   # interruptible (validation) jobs. Release/deploy jobs stay non-interruptible.
   auto_cancel:
