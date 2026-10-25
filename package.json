@@ -573,7 +573,7 @@
     "prepackage": "npm run fetch:ui:local && npm run fetch:bin:local && node scripts/collect-bundled-licenses.mjs && npm run compile"
   },
   "dependencies": {
-    "vscode-languageclient": "^10.1.2",
+    "vscode-languageclient": "^11.0.0",
     "vscode-ws-jsonrpc": "^4.0.2",
     "ws": "^8.22.0"
   },
