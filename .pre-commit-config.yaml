@@ -78,7 +78,7 @@ repos:
   # Markdown linting
   # =============================================================================
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.50.0
+    rev: v0.50.1
     hooks:
       - id: markdownlint
         args: [--fix, --disable, MD013, MD033, MD041, MD024, --]
@@ -98,7 +98,7 @@ repos:
   # Commit message validation (Conventional Commits)
   # =============================================================================
   - repo: https://github.com/commitizen-tools/commitizen
-    rev: v4.19.3
+    rev: v4.19.4
     hooks:
       - id: commitizen
         stages: [commit-msg]
